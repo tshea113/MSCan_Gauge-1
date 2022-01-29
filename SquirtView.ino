@@ -1,7 +1,7 @@
 // User configuerable variables
-const int myCANid = 10; // CAN ID of this unit
-const int msCANid = 0; // CAN ID of the Megasquirt (should almost always be 0)
-const int REVLIMIT = 6800; // soft rev limit at which to start blinking the tach gauge
+const int myCANid   = 10;     // CAN ID of this unit
+const int msCANid   = 0;      // CAN ID of the Megasquirt (should almost always be 0)
+const int REVLIMIT  = 6800;   // Soft rev limit at which to start blinking the tach gauge
 
 #include <Metro.h>
 #include <FlexCAN.h>
@@ -10,56 +10,68 @@ const int REVLIMIT = 6800; // soft rev limit at which to start blinking the tach
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Time.h>
-
 #include <FastLED.h>
-#define NUMLEDS 16
-CRGB leds[NUMLEDS];
-
 #include <Encoder.h>
-Encoder myEnc(INT1, INT2); // interrupts on pin6, 7
-const unsigned long debouncing_time = 150; //Debouncing Time - 150 is good, 200 is better, 250 seems worse
-volatile unsigned long last_millis; //switch debouncing
 
 // Pin definitions
 #define LEDPIN      5   // Neopixel LED
 #define RBUTTON_INT 15  //  
-#define INT1        16  //  
-#define INT2        17  // 
+#define ENC_PIN_1   16  //  
+#define ENC_PIN_2   17  // 
 #define OLED_DC     10  // OLED Data/Command
 #define OLED_CS     9   // OLED Chip Select
 #define OLED_RESET  8   // OLED Reset
+#define SPI_SCK     14  // SPI Clock
+#define TEENSY_LED  13  // Onboard LED on the Teensy
+
+// Constants
+const int CAN_TIMEOUT                   = 1000;   // Display an error message if no CAN data during this interval
+const int DISPLAY_REFRESH               = 100;    // Refresh the display at this interval
+const int LED_FLASH_TIMER               = 1;      // How long to flash the led upon CAN frame receive/transmit
+const int GAUGE_FLASH_TIMER             = 100;    // Blink the led ring pixels during certain conditions
+const int NUM_LEDS                      = 16;     // Number of LEDs on the NeoPixel ring
+const unsigned long DEBOUNCING_TIME     = 150;    // Debouncing Time - 150 is good, 200 is better, 250 seems worse
+const int OLED_HEIGHT                   = 64;     // Height of the OLED screen in pixels
+const int OLED_WIDTH                    = 128;    // Width of the OLED screen in pixels
+const int CAN_BAUD                      = 500000; // CAN baud rate
+const int MS_DATA_NAME_MAX_LENGTH       = 10;     // Maximum length of MS data field name
+const int MS_DATA_BIN_NAME_MAX_LENGTH   = 14;     // Maximum length of MS data field name
+
+// FastLED
+CRGB leds[NUMLEDS];
+
+// Encoder
+Encoder myEnc(ENC_PIN_1, ENC_PIN_2);
+volatile unsigned long last_millis;         //switch debouncing
 
 // OLED Display Hardware SPI
 Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 
+// TODO: Is this really needed?
 #if (SSD1306_LCDHEIGHT != 64)
 #error("Height incorrect, please fix Adafruit_SSD1306.h!");
 #endif
 
 // Metro ticks are milliseconds
-Metro commTimer = Metro(1000); // display an error message if no CAN data during this interval
-Metro displayTimer = Metro(100); // refresh the display at this interval
-Metro ledTimer = Metro(1); // how long to flash the led upon CAN frame receive/transmit
-Metro gaugeBlinkTimer = Metro(100); // blink the led ring pixels during certain conditions
+Metro commTimer = Metro(CAN_TIMEOUT);
+Metro displayTimer = Metro(DISPLAY_REFRESH);
+Metro ledTimer = Metro(LED_FLASH_TIMER);
+Metro gaugeBlinkTimer = Metro(GAUGE_FLASH_TIMER);
 boolean connectionState = false;
 boolean gaugeBlink = false;
 
-int led = 13;
-FlexCAN CANbus(500000);
+int led = TEENSY_LED;
+FlexCAN CANbus(CAN_BAUD);
 static CAN_message_t txmsg,rxmsg;
 static uint8_t hex[17] = "0123456789abcdef";
 
-int rpm,ect,afr;
-unsigned int txTimer,rxTimer;
-
+// TODO: Organize these better. Maybe in a struct?
 //MS data vars
 byte indicator[7]; // where to store indicator data
 unsigned int RPM, CLT, MAP, MAT, SPKADV, BATTV, TPS, Knock, Baro, EGOc, IAC, dwell, bstduty, idle_tar;
 int AFR, AFRtgt;
 unsigned int MAP_HI, Knock_HI, RPM_HI, CLT_HI, MAT_HI;
 int AFR_HI, AFR_LO;
-
-//static char sprintfbuffer[2];
 
 struct ledval
 {
@@ -79,7 +91,7 @@ struct ledval
 
 const ledval ledarray[] PROGMEM =
 {
-//r0, g0, b0, r1, g1, b1, r2, g2, b2, r3, g3, b3
+  //r0, g0, b0, r1, g1, b1, r2, g2, b2, r3, g3, b3
   {0x0,0x5,0xFF,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0}, //0
   {0x0,0x6,0xFE,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0}, //1
   {0x0,0x7,0xFD,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0}, //2
@@ -653,37 +665,37 @@ const unsigned char ms_logo [] =
 
 struct MSDataObject
 {
-  char name[10]; // length tbd
-  byte block; // max val 32?
-  unsigned int offset; // max val?
-  byte reqbytes; // max val 8
-  byte mult; // does this need to be * 0.1 ?
+  char name[MS_DATA_NAME_MAX_LENGTH];
+  byte block;                         // max val 32?
+  unsigned int offset;                // max val?
+  byte reqbytes;                      // max val 8
+  byte mult;                          // does this need to be * 0.1 ?
 };
 
 const MSDataObject MSData[] PROGMEM =
 {
-// string,  block, offset, reqbytes, mult, div
-  {"RPM",     7,   6,  2,    0   }, // 0
-  {"AFR",     7,  252, 1,    0   }, // 1
-  {"CLT",     7,  22,  2,    1   }, // 2
-  {"MAP",     7,  18,  2,    1   }, // 3
-  {"MAT",     7,  20,  2,    1   }, // 4
-  {"SPKADV",  7,   8,  2,    1   }, // 5
-  {"BATTV",   7,  26,  2,    1   }, // 6
-  {"TPS",     7,  24,  2,    1   }, // 7
-  {"Knock",   7,  32,  2,    1   }, // 8
-  {"Baro",    7,  16,  2,    1   }, // 9
-  {"EGOc",    7,  34,  2,    1   }, // 10
-  {"IAC",     7,  54,  2,    0   }, // 11 -- this was GFC's to 49 / 125
-  {"dwell",   7,  62,  2,    1   }, // 12
-  {"bstduty", 7,  39,  1,    0   }, // 13 boost duty cycle
-  {"idletar", 7, 380,  2,    0   }, // 14
-  {"AFRtgt",  7,  12,  1,    1   }, // 15
+// string,  block, offset, reqbytes, mult,      div
+  {"RPM",     7,    6,        2,      0   }, // 0
+  {"AFR",     7,    252,      1,      0   }, // 1
+  {"CLT",     7,    22,       2,      1   }, // 2
+  {"MAP",     7,    18,       2,      1   }, // 3
+  {"MAT",     7,    20,       2,      1   }, // 4
+  {"SPKADV",  7,    8,        2,      1   }, // 5
+  {"BATTV",   7,    26,       2,      1   }, // 6
+  {"TPS",     7,    24,       2,      1   }, // 7
+  {"Knock",   7,    32,       2,      1   }, // 8
+  {"Baro",    7,    16,       2,      1   }, // 9
+  {"EGOc",    7,    34,       2,      1   }, // 10
+  {"IAC",     7,    54,       2,      0   }, // 11 -- this was GFC's to 49 / 125
+  {"dwell",   7,    62,       2,      1   }, // 12
+  {"bstduty", 7,    39,       1,      0   }, // 13 boost duty cycle
+  {"idletar", 7,    380,      2,      0   }, // 14
+  {"AFRtgt",  7,    12,       1,      1   }, // 15
 };
 
 struct MSDataBinaryObject 
 {
-  char name[14];
+  char name[MS_DATA_BIN_NAME_MAX_LENGTH];
   byte sbyte;
   byte bitp;
 };
@@ -701,7 +713,7 @@ const MSDataBinaryObject MSDataBin[] PROGMEM =
   {"TPS dec",          0,  5 },
   {"MAP acc",          0,  6 },
   {"MAP dec",          0,  7 },
-//1 status1 - block7 offset 78
+// 1 status1 - block 7 offset 78
   {"Need Burn",        1,  0,},
   {"Data Lost",        1,  1 },
   {"Config Error",     1,  2 },
@@ -709,7 +721,7 @@ const MSDataBinaryObject MSDataBin[] PROGMEM =
   {"VE1/2",            1,  5 },
   {"SPK1/2",           1,  6 },
   {"Full-sync",        1,  7 },
-//2 status2 - block 7 offset 79
+// 2 status2 - block 7 offset 79
   {"N2O 1",            2,  0 },
   {"N2O 2",            2,  1 },
   {"Rev lim",          2,  2 },
@@ -718,7 +730,7 @@ const MSDataBinaryObject MSDataBin[] PROGMEM =
   {"Spark cut",        2,  5 },
   {"Over boost",       2,  6 },
   {"CL Idle",          2,  7 },
-//3 status3 - block 7 offset 80
+// 3 status3 - block 7 offset 80
   {"Fuel cut",         3,  0 },
 //{"T-log",            3,  1 },
 //{"3 step",           3,  2 },
@@ -727,7 +739,7 @@ const MSDataBinaryObject MSDataBin[] PROGMEM =
   {"Soft limit",       3,  5 },
 //{"Bike shift",       3,  6 },
   {"Launch",           3,  7 },
-//4 check engine lamps - block 7 offset 425
+// 4 check engine lamps - block 7 offset 425
   {"cel_map",          4,  0 },
   {"cel_mat",          4,  1 },
   {"cel_clt",          4,  2 },
@@ -736,7 +748,7 @@ const MSDataBinaryObject MSDataBin[] PROGMEM =
   {"cel_afr0",         4,  5 },
   {"cel_sync",         4,  6 },
   {"cel_egt",          4,  7 },
-//5 port status - block 7 offset 70
+// 5 port status - block 7 offset 70
   {"port0",            5,  0 },
   {"port1",            5,  1 },
   {"port2",            5,  2 },
@@ -744,7 +756,7 @@ const MSDataBinaryObject MSDataBin[] PROGMEM =
   {"port4",            5,  4 },
   {"port5",            5,  5 },
   {"port6",            5,  6 },
-//6 status6 - block 7 offset 233
+// 6 status6 - block 7 offset 233
   {"EGT warn",         6,  0 },
   {"EGT shutdown",     6,  1 },
   {"AFR warn",         6,  2 },
@@ -752,7 +764,7 @@ const MSDataBinaryObject MSDataBin[] PROGMEM =
   {"Idle VE",          6,  4 },
   {"Idle VE",          6,  5 },
   {"Fan",              6,  6 },
-//7 status7 - block 7 offset 351
+// 7 status7 - block 7 offset 351
   {"Knock",            7,  4 },
   {"AC",               7,  5 },
 };
@@ -871,7 +883,7 @@ btn buttons[3];
 void setup(void)
 {
   digitalWrite(led, 1);
-  SPI.setSCK(14); // alternate clock pin so we can still use the LED
+  SPI.setSCK(SPI_SCK); // alternate clock pin so we can still use the LED
   //setTime(1415515398);
   CANbus.begin();
   pinMode(led, OUTPUT);
@@ -927,14 +939,11 @@ void loop(void)
     display.setCursor(0,56);
     display.println("Waiting for data...");
     display.setCursor(0,0);
-    display.println(GPS.time.age());
-    display.println(GPS.location.isUpdated());
-    display.println(GPS.location.lat(),5);
-    display.println(GPS.location.lng(),5);
     display.display();
-    for(int i=0; i<16; i++)
+
+    for(int i = 0; i < 16; i++)
     {
-      leds[i].setRGB(0,0,0); // initialize led ring
+      leds[i].setRGB(0, 0, 0); // initialize led ring
     }
     FastLED.show();
     commTimer.reset();
@@ -1038,8 +1047,9 @@ void loop(void)
       case 1574: // 54
         indicator[4]=rxmsg.buf[2]; // cel
         break;
-      default: // not a broadcast packet
-        //assume this is a normal Megasquirt CAN protocol packet and decode the header
+      default: 
+        // not a broadcast packet
+        // assume this is a normal Megasquirt CAN protocol packet and decode the header
         if (rxmsg.ext)
         {
           rxmsg_id.i = rxmsg.id;
