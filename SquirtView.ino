@@ -879,6 +879,7 @@ struct btn
 };
 
 btn buttons[3];
+
 // -------------------------------------------------------------
 void setup(void)
 {
@@ -1622,22 +1623,8 @@ void gauge_debug()
   display.print(S_index);
   display.print("b");
   display.println(B_index);
-  signed char latdeg;
-  unsigned char latmin,lonmin,londeg;
-  unsigned int latmmin,lonmmin;
-  double intpart;
-  latdeg, londeg, latmin, lonmin, latmmin, lonmmin = 0;
-  latdeg = GPS.location.rawLat().negative ? 0 - GPS.location.rawLat().deg : GPS.location.rawLat().deg;
-  latmin = (GPS.location.lat()-GPS.location.rawLat().deg)*60;
-  latmmin = (GPS.location.rawLat().billionths * 3 / 50000) - latmin * 1000;
-  londeg = GPS.location.rawLng().deg;
-  lonmin = modf(abs(GPS.location.lng()),&intpart)*60,3;
-  lonmmin = (GPS.location.rawLng().billionths * 3 / 50000) - lonmin * 1000;
-  display.println(GPS.location.lng(),5);
-  display.println(modf(abs(GPS.location.lng()),&intpart)*60,3);
-  display.println(lonmin);
-  display.println(lonmmin);
-  display.setTextSize(2);
+
+  display.display();
 }
 
 void gauge_vitals()
@@ -1648,9 +1635,6 @@ void gauge_vitals()
   // size 2 .. 10 x 14
   //Vitals - AFR, RPM, MAP,
   clear();
-
-  // display.drawLine(63, 0, 63, 55, WHITE); //vert centerline
-  // display.drawLine(0, 31, 127, 31, WHITE); //horiz centerline
 
   display.setTextSize(2);
   display.setTextColor(WHITE);
@@ -1663,7 +1647,7 @@ void gauge_vitals()
   display.print("RPM");
 
   //line2
-  display.setCursor(2, 26);
+  display.setCursor(0, 26);
   display.setTextSize(1);
   display.print("AFR");
   display.setCursor(20, 19);
@@ -1671,19 +1655,7 @@ void gauge_vitals()
   divby10(AFR);
   display.print(tempchars);
 
-  // display.setCursor(69,19);
-  // display.setTextSize(1);
-  // display.print("AFR");
-  // display.drawTriangle(72, 32, 77, 27, 82, 32, WHITE);
-  // divby10(AFR - AFRtgt);
-  // display.setTextSize(1);
-  // display.setCursor(88,26);
-  // display.print(tempchars);
-  // display.setCursor(88,18);
-  // divby10(AFRtgt);
-  // display.print(tempchars);
-
-  display.setCursor(71, 25);
+  display.setCursor(72, 25);
   display.setTextSize(1);
   display.print("CLT");
   display.setCursor(88, 18);
@@ -1696,7 +1668,6 @@ void gauge_vitals()
   display.print("MAP");
   display.setCursor(20, 40);
   display.setTextSize(2);
-  // divby10(MAP); // doesn't need single point resolution
   display.print(MAP/10);
 
   // contextual gauge - if idle on, show IAC%
@@ -1737,13 +1708,10 @@ void gauge_vitals()
     display.print("MAT");
     display.setCursor(92,40);
     display.setTextSize(2);
-    // divby10(MAT);
     display.print(MAT/10);
   }
-  // display.display();
+
   gauge_bottom();
-  // Serial.println("End gauge display");
-  // display.display();
 }
 
 void gauge_bottom()
@@ -1751,8 +1719,6 @@ void gauge_bottom()
   display.setTextSize(1);
   display.drawFastHLine(1, (63 - 7), 126, WHITE);
   display.setCursor(0, 57);
-  display.setTextColor(BLACK, WHITE);
-  // display.print("CELIDLFANKNKBSTAFR");
   display.setTextColor(BLACK, WHITE);
 
   //CEL
@@ -1769,7 +1735,7 @@ void gauge_bottom()
   display.print("CEL");
   display.drawFastVLine(1, 57, 8, WHITE);
 
-  //FAN
+  //Fan
   if ( bitRead(indicator[6],6) == 1)
   {
     display.setTextColor(BLACK, WHITE);
@@ -1845,7 +1811,6 @@ void gauge_bottom()
   display.drawFastVLine(106, 57, 8, WHITE);
   display.drawFastVLine(126, 57, 8, WHITE);
 
-  // Serial.println(".");
   // FAN, WUE, ASE, CEL, Idl, Knk, over boost
   // CEL - Idl - FAN - KnK - BST - AFR
   display.display();
@@ -1858,8 +1823,7 @@ void gauge_single()
   String label;
   byte temp_index;
   clear();
-  // unsigned int RPM, CLT, MAP, MAT, SPKADV, BATTV, TPS, Knock, Baro, EGOc, IAC, dwell, bstduty, idle_tar;
-  // int AFR, AFRtgt;
+
   if (R_index < 0)
   {
     myEnc.write(0);
