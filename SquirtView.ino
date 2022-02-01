@@ -1608,7 +1608,6 @@ void gauge_warning()
 
 }
 
-
 void gauge_debug()
 {
   clear();
@@ -1748,7 +1747,7 @@ void gauge_bottom()
     display.setTextColor(WHITE);
   }
   display.setCursor(24, 57);
-  display.print("FAN");
+  display.print("Fan");
   display.drawFastVLine(21, 57, 8, WHITE);
 
   //Idle
@@ -1778,7 +1777,7 @@ void gauge_bottom()
     display.setTextColor(WHITE);
   }
   display.setCursor(66, 57);
-  display.print("KnK");
+  display.print("Knk");
   display.drawFastVLine(63, 57, 8, WHITE);
 
   //Overboost
