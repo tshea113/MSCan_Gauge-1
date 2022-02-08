@@ -9,7 +9,7 @@ const int REVLIMIT  = 6800;   // Soft rev limit at which to start blinking the t
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <Time.h>
+#include <TimeLib.h>
 #include <FastLED.h>
 #include <Encoder.h>
 
@@ -38,14 +38,19 @@ const int MS_DATA_NAME_MAX_LENGTH       = 10;     // Maximum length of MS data f
 const int MS_DATA_BIN_NAME_MAX_LENGTH   = 14;     // Maximum length of MS data field name
 
 // FastLED
-CRGB leds[NUMLEDS];
+CRGB leds[NUM_LEDS];
 
 // Encoder
 Encoder myEnc(ENC_PIN_1, ENC_PIN_2);
 volatile unsigned long last_millis;         //switch debouncing
 
 // OLED Display Hardware SPI
-Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
+// TODO: New screen uses SPI fix this
+// Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 // TODO: Is this really needed?
 #if (SSD1306_LCDHEIGHT != 64)
@@ -897,11 +902,13 @@ void setup(void)
   FastLED.show();
 
   // By default, we'll generate the high voltage from the 3.3v line internally! (neat!)
-  display.begin(SSD1306_SWITCHCAPVCC);
+  // TODO: Revert when SPI screen is used.
+  // display.begin(SSD1306_SWITCHCAPVCC);
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
   // Show splashscreen
   display.clearDisplay();
-  display.drawBitmap(0,0, ms_logo, 128, 64, 1);
+  display.drawBitmap(0,0, miata_logo, 128, 64, 1);
   display.display();
 
   FastLED.addLeds<NEOPIXEL, LEDPIN>(leds, NUM_LEDS);
@@ -1222,7 +1229,7 @@ void divby10(int val)
 // interrupt handler for the encoder button
 void ISR_debounce ()
 {
-  if((long)(millis() - last_millis) >= (debouncing_time * 10))
+  if((long)(millis() - last_millis) >= (DEBOUNCING_TIME * 10))
   {
     clear();
     if (S_index != 0)
@@ -2013,7 +2020,7 @@ void gauge_single()
     display.print(tempchars);
   }
 
-  if (R_index == 2
+  if (R_index == 2)
    {
     if (millis() > (validity_window + 30000))
     {
