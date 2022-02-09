@@ -13,6 +13,8 @@ const int REVLIMIT  = 6800;   // Soft rev limit at which to start blinking the t
 #include <FastLED.h>
 #include <Encoder.h>
 
+#include "RotKnob.h"
+
 // Pin definitions
 #define LEDPIN      5   // Neopixel LED
 #define RBUTTON_INT 15  //  
@@ -41,7 +43,7 @@ const int MS_DATA_BIN_NAME_MAX_LENGTH   = 14;     // Maximum length of MS data f
 CRGB leds[NUM_LEDS];
 
 // Encoder
-Encoder myEnc(ENC_PIN_1, ENC_PIN_2);
+rotKnob<ENC_PIN_1, ENC_PIN_2> myEnc;
 volatile unsigned long last_millis;         //switch debouncing
 
 // OLED Display Hardware SPI
@@ -52,7 +54,6 @@ volatile unsigned long last_millis;         //switch debouncing
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
-// TODO: Is this really needed?
 #if (SSD1306_LCDHEIGHT != 64)
 #error("Height incorrect, please fix Adafruit_SSD1306.h!");
 #endif
@@ -774,7 +775,7 @@ const MSDataBinaryObject MSDataBin[] PROGMEM =
   {"AC",               7,  5 },
 };
 
-long R_index = 0; // for rotary encoder
+uint8_t R_index = 0; // for rotary encoder
 byte B_index = 0; // Button increment
 byte M_index = 0; // Menu increment
 byte S_index = 0; // Select increment
@@ -931,6 +932,10 @@ void setup(void)
     delay(20);
   }
 
+  // TODO: This value is chosen because of the number of single gauges. Probably a better way to do this.
+  // Encoder has values from 0 to 15
+  myEnc.begin(0, 0, 15);
+
   delay(1000);
   digitalWrite(led, 0);
   //commTimer.reset();
@@ -950,10 +955,10 @@ void loop(void)
     gaugeBlinkTimer.reset();
   }
 
-  // see if we have gotten any CAN messages in the last second. display an error if not
+  // See if we have gotten any CAN messages in the last second. display an error if not
   if (commTimer.check())
   {
-    clear();
+    display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(WHITE);
     display.setCursor(0,56);
@@ -973,7 +978,11 @@ void loop(void)
   // main display routine
   if (connectionState && displayTimer.check())
   {
-    R_index=myEnc.read()/4;
+    if (myEnc.available())
+    {
+      R_index=myEnc.read();
+      Serial.println(myEnc.read());
+    }
     if (! value_oob() )
     {
       switch (B_index)
@@ -1148,12 +1157,12 @@ void loop(void)
       break;
     case '3':
       // press button
-      clear();
+      display.clearDisplay();
       if (S_index != 0)
       {
         // deselect brightness
         S_index=0;
-        clear();
+        display.clearDisplay();
         return;
       }
       if (B_index < 5)
@@ -1199,21 +1208,6 @@ void loop(void)
   }
 }
 
-void clear()
-{
-  // used where display.clearDisplay() would normally be called so that we can make sure certain status
-  // indicators are always shown.
-  display.clearDisplay();
-
-  // there is no room for the GPS status on other than the main screen
-  if (B_index == 0)
-  {
-    display.setCursor(116,0);
-    display.setTextSize(1);
-    display.setTextColor(WHITE);
-  }
-}
-
 void divby10(int val)
 {
   byte length;
@@ -1231,12 +1225,12 @@ void ISR_debounce ()
 {
   if((long)(millis() - last_millis) >= (DEBOUNCING_TIME * 10))
   {
-    clear();
+    display.clearDisplay();;
     if (S_index != 0)
     {
       // deselect brightness
       S_index=0;
-      clear();
+      display.clearDisplay();;
       return;
     }
     if (B_index < 4)
@@ -1281,12 +1275,10 @@ void gauge_histogram()
 {
   byte val;
 
-  val = AFR - 100; // temporary
-
   // 10hz update time
   if (millis() > (validity_window + 80))
   {
-    clear();
+    display.clearDisplay();;
 
     if (R_index > 2 || R_index < 0)
     {
@@ -1368,15 +1360,16 @@ void gauge_histogram()
       break;
     }
 
-    /*  refresh rate debug
-      display.setCursor(50, 0);
-      display.setTextSize(1);
-      display.setTextColor(WHITE);
-      display.print(" t");
-      display.print((millis() - validity_window));
-      display.print(" v");
-      display.print(val);
-      */
+    // refresh rate debug
+    // display.setCursor(90, 0);
+    // display.setTextSize(1);
+    // display.setTextColor(WHITE);
+    // display.print("t ");
+    // display.print((millis() - validity_window));
+    // display.setCursor(90, 7);
+    // display.print("v ");
+    // display.print(val);
+
     validity_window=millis();
     // display.display();
   }
@@ -1413,7 +1406,7 @@ void gauge_warning()
   byte dlength, llength;
   int midpos;
 
-  clear();
+  display.clearDisplay();;
 
   if (RPM > 6800)
   {
@@ -1617,7 +1610,7 @@ void gauge_warning()
 
 void gauge_debug()
 {
-  clear();
+  display.clearDisplay();;
   display.setCursor(32,0);
   display.setTextSize(1);
   display.setTextColor(WHITE);
@@ -1640,7 +1633,7 @@ void gauge_vitals()
   // size 1 .. 5 x 7
   // size 2 .. 10 x 14
   //Vitals - AFR, RPM, MAP,
-  clear();
+  display.clearDisplay();;
 
   display.setTextSize(2);
   display.setTextColor(WHITE);
@@ -1828,16 +1821,10 @@ void gauge_single()
   char data[10];
   String label;
   byte temp_index;
-  clear();
+  display.clearDisplay();
 
-  if (R_index < 0)
-  {
-    myEnc.write(0);
-    R_index=0;
-  }
-
-  if (R_index <= 15)
-  {
+  // if (R_index <= 15)
+  // {
     switch (R_index)
     {
       case 0:
@@ -1917,33 +1904,34 @@ void gauge_single()
         strcpy(data, tempchars);
         break;
     }
-  }
-  else
-  {
-    temp_index = R_index - 15;
-    char temporary[15];
-    byte sbyte, bitp, dbit;
-    strcpy_P(temporary, MSDataBin[temp_index].name);
-    label=temporary;
+  // }
+  // TODO: I'm not sure if this is even needed. Need to figure out if this data is useful. If so the data should loop properly. Maybe update the UI for this a bit?
+  // else
+  // {
+  //   temp_index = R_index - 15;
+  //   char temporary[15];
+  //   byte sbyte, bitp, dbit;
+  //   strcpy_P(temporary, MSDataBin[temp_index].name);
+  //   label=temporary;
 
-    sbyte=pgm_read_byte(&MSDataBin[temp_index].sbyte);
-    bitp=pgm_read_byte(&MSDataBin[temp_index].bitp);
-    dbit=bitRead(indicator[sbyte], bitp);
-    if ( dbit == 1 )
-    {
-      data[0]='O';
-      data[1]='n';
-      data[2]='\0';
-    }
-    else
-    {
-      data[0]='O';
-      data[1]='f';
-      data[2]='f';
-      data[3]='\0';
-    }
+  //   sbyte=pgm_read_byte(&MSDataBin[temp_index].sbyte);
+  //   bitp=pgm_read_byte(&MSDataBin[temp_index].bitp);
+  //   dbit=bitRead(indicator[sbyte], bitp);
+  //   if ( dbit == 1 )
+  //   {
+  //     data[0]='O';
+  //     data[1]='n';
+  //     data[2]='\0';
+  //   }
+  //   else
+  //   {
+  //     data[0]='O';
+  //     data[1]='f';
+  //     data[2]='f';
+  //     data[3]='\0';
+  //   }
 
-  }
+  // }
 
   byte dlength=strlen(data);
   byte llength=label.length();
@@ -2100,19 +2088,12 @@ void gauge_single()
 
 void gauge_menu()
 {
-  // display.setTextSize(1);display.setTextColor(WHITE);display.print("m");display.print(M_index); display.print("r"); display.print(R_index);display.print("s"); display.print(S_index);display.print("b");display.println(B_index);display.setTextSize(2);
-
-  if (R_index < 0)
-  {
-    R_index = 0;
-  }
-
   display.setTextColor(WHITE);
-  clear();
+  display.clearDisplay();
   display.setCursor(0,0);
   display.setTextSize(2);
 
-  if (S_index == 0)
+  if (S_index == 0) // Nothing selected
   {
     if (R_index > 3)
     {
@@ -2136,7 +2117,7 @@ void gauge_menu()
         display.display();
         break;
 
-      case 1: //brightness selected
+      case 1: // Brightness highlighted
         //line1
         display.setTextColor(WHITE);
         display.println("_Menu");
@@ -2153,7 +2134,7 @@ void gauge_menu()
         display.display();
         break;
 
-      case 2: //text size selected
+      case 2: // Text size highlighted
         //line1
         display.setTextColor(WHITE);
         display.println("_Menu");
@@ -2170,7 +2151,7 @@ void gauge_menu()
         display.display();
         break;
 
-      case 3: //save selected
+      case 3: // Save highlighted
         //line1
         display.setTextColor(WHITE);
         display.println("_Menu");
@@ -2186,18 +2167,18 @@ void gauge_menu()
         display.print("Save");
         display.display();
         break;
-    } //end switch
-  } // end S_index 0
+    } // end switch
+  } // end Nothing selected
 
-  if (S_index == 1)
+  if (S_index == 1) // Brightness Selected
   {
     neo_brightness=R_index;
-    clear();
+    display.clearDisplay();;
     display.setCursor(0,0);
     if (R_index > 8)
     {
       R_index = 8;
-      myEnc.write(8*4);
+      myEnc.write(8);
       neo_brightness = 8;
     }
     if (R_index < 1)
@@ -2221,22 +2202,22 @@ void gauge_menu()
     //line4
     display.print("Save");
     display.display();
-  }// brightness selection, end S_index 1
+  }// Brightness selected
 
   if (S_index == 2)
   {
     // temp=M_index;
     g_textsize=R_index;
-    // if (R_index > 4)
-    // {
-    //   R_index = 4;
-    //   myEnc.write(16);
-    //   g_textsize = 4;
-    // }
+    if (R_index > 4)
+    {
+      R_index = 4;
+      myEnc.write(4);
+      g_textsize = 4;
+    }
     if (R_index < 1)
     {
       R_index = 1;
-      myEnc.write(4);
+      myEnc.write(1);
       g_textsize=1;
     }
 
@@ -2254,14 +2235,14 @@ void gauge_menu()
     display.setTextColor(WHITE);
     display.print("Save");
     display.display();
-  } // text size selection S_index 2
+  } // Text size selected
 } // end gauge_menu
 
 void gauge_danger()
 {
   display.setTextSize(2);
   display.setTextColor(WHITE);
-  clear();
+  display.clearDisplay();;
   display.setCursor(0,0);
 
   display.setCursor(4,0);
