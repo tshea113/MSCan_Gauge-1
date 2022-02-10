@@ -13,7 +13,7 @@ engine controller](http://www.msextra.com/) via CAN bus. Data is both received f
 ## Libraries required
 * [Metro](https://www.pjrc.com/teensy/arduino_libraries/Metro.zip) - event scheduling
 * [Time](https://www.pjrc.com/teensy/arduino_libraries/Time.zip) - onboard clock
-* [FlexCAN](https://github.com/teachop/FlexCAN_Library) - CAN bus
+* [FlexCAN](https://github.com/collin80/FlexCAN_Library) - CAN bus
 * [SSD1306](https://www.pjrc.com/teensy/arduino_libraries/Adafruit_SSD1306.zip) - OLED display
 * [Adafruit GFX](https://github.com/adafruit/Adafruit-GFX-Library) - required by SSD1306
 * [FastLED](https://github.com/FastLED/FastLED) - LED ring

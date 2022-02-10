@@ -67,9 +67,7 @@ boolean connectionState = false;
 boolean gaugeBlink = false;
 
 int led = TEENSY_LED;
-FlexCAN CANbus(CAN_BAUD);
 static CAN_message_t txmsg,rxmsg;
-static uint8_t hex[17] = "0123456789abcdef";
 
 // TODO: Organize these better. Maybe in a struct?
 //MS data vars
@@ -785,28 +783,6 @@ byte g_textsize = 1;
 char tempchars[11];
 
 // -------------------------------------------------------------
-static void hexDump(uint8_t dumpLen, uint8_t *bytePtr) 
-{
-  uint8_t working;
-  while( dumpLen-- )
-  {
-    working = *bytePtr++;
-    Serial.write( hex[ working>>4 ] );
-    Serial.write( hex[ working&15 ] );
-  }
-  //Serial.write('\r');
-  //Serial.write('\n');
-}
-
-static void binDump(char working)
-{
-  int i;
-  for (i=7; i>=0; i--)
-  {
-    (bitRead(working,i) == 1) ? Serial.print("1") : Serial.print("0");
-  }
-}
-
 static void ledBlink()
 {
   ledTimer.reset();
@@ -891,7 +867,7 @@ void setup(void)
 {
   digitalWrite(led, 1);
   SPI.setSCK(SPI_SCK); // alternate clock pin so we can still use the LED
-  CANbus.begin();
+  Can0.begin(CAN_BAUD);
   pinMode(led, OUTPUT);
   digitalWrite(led, 1);
 
@@ -1020,7 +996,7 @@ void loop(void)
   }
 
   // handle received CAN frames
-  if ( CANbus.read(rxmsg) )
+  if ( Can0.read(rxmsg) )
   {
     commTimer.reset();
     connectionState = true;
@@ -1129,7 +1105,7 @@ void loop(void)
                   txmsg.buf[6] = year() / 256;
                   txmsg.buf[7] = year() % 256;
                   // send the message!
-                  CANbus.write(txmsg);
+                  Can0.write(txmsg);
                 }
               } 
             }
