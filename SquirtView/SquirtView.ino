@@ -9,44 +9,13 @@
 #include <Encoder.h>
 
 #include "RotKnob.h"
+#include "MegasquirtMessages.h"
 #include "definitions.h"
 #include "constants.h"
-
-// FastLED
-CRGB leds[NUM_LEDS];
-
-// Encoder
-rotKnob<ENC_PIN_1, ENC_PIN_2> myEnc;
-volatile unsigned long last_millis;         //switch debouncing
-
-// OLED Display Hardware SPI
-// TODO: New screen uses SPI fix this
-// Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
-
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 #if (SSD1306_LCDHEIGHT != 64)
 #error("Height incorrect, please fix Adafruit_SSD1306.h!");
 #endif
-
-// Metro ticks are milliseconds
-Metro commTimer = Metro(CAN_TIMEOUT);
-Metro displayTimer = Metro(DISPLAY_REFRESH);
-Metro ledTimer = Metro(LED_FLASH_TIMER);
-Metro gaugeBlinkTimer = Metro(GAUGE_FLASH_TIMER);
-boolean connectionState = false;
-boolean gaugeBlink = false;
-
-int led = TEENSY_LED;
-static CAN_message_t txmsg,rxmsg;
-
-// TODO: Organize these better. Maybe in a struct?
-//MS data vars
-byte indicator[7]; // where to store indicator data
-unsigned int RPM, CLT, MAP, MAT, SPKADV, BATTV, TPS, Knock, Baro, EGOc, IAC, dwell, bstduty, idle_tar;
-int AFR, AFRtgt;
-unsigned int MAP_HI, Knock_HI, RPM_HI, CLT_HI, MAT_HI;
-int AFR_HI, AFR_LO;
 
 struct GaugeData
 {
@@ -64,7 +33,46 @@ struct GaugeData
   unsigned int dwell;
   unsigned int bstduty;
   unsigned int idle_tar;
+  int AFR;
+  int AFR_tar;
 };
+
+struct btn
+{
+  unsigned int last:1;
+  int init;
+  int value;
+};
+
+// FastLED
+CRGB leds[NUM_LEDS];
+
+// Encoder
+rotKnob<ENC_PIN_1, ENC_PIN_2> myEnc;
+volatile unsigned long last_millis;   //switch debouncing
+
+// OLED Display Hardware SPI
+// TODO: New screen uses SPI fix this
+// Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+// Metro ticks are milliseconds
+Metro commTimer = Metro(CAN_TIMEOUT);
+Metro displayTimer = Metro(DISPLAY_REFRESH);
+Metro ledTimer = Metro(LED_FLASH_TIMER);
+Metro gaugeBlinkTimer = Metro(GAUGE_FLASH_TIMER);
+boolean connectionState = false;
+boolean gaugeBlink = false;
+
+static CAN_message_t txmsg,rxmsg;
+
+// TODO: Organize these better. Maybe in a struct?
+//MS data vars
+byte indicator[7]; // where to store indicator data
+GaugeData gaugeData;
+unsigned int MAP_HI, Knock_HI, RPM_HI, CLT_HI, MAT_HI;
+int AFR_HI, AFR_LO;
 
 uint8_t R_index = 0; // for rotary encoder
 byte B_index = 0; // Button increment
@@ -79,60 +87,10 @@ char tempchars[11];
 static void ledBlink()
 {
   ledTimer.reset();
-  digitalWrite(led, 1);
+  digitalWrite(TEENSY_LED, 1);
 }
 
-// pack/unpack the Megasquirt extended message format header
-typedef struct msg_packed_int
-{
-  unsigned char b0;
-  unsigned char b1;
-  unsigned char b2;
-  unsigned char b3;
-} msg_packed_int;
-
-typedef struct msg_bit_info
-{
-  unsigned int spare:2;
-  unsigned int block_h:1;
-  unsigned int block:4;
-  unsigned int to_id:4;
-  unsigned int from_id:4;
-  unsigned int msg_type:3;
-  unsigned int offset:11;
-} msg_bit_info;
-
-typedef union
-{
-  unsigned int i;
-  msg_packed_int b;
-  msg_bit_info values;
-} msg_packed;
-
 msg_packed rxmsg_id,txmsg_id;
-
-// unpack the vars from the payload of a MSG_REQ packet
-typedef struct msg_req_data_packed_int
-{
-  unsigned char b2;
-  unsigned char b1;
-  unsigned char b0;
-} msg_req_data_packed_int;
-
-typedef struct msq_req_data_bit_info
-{
-  unsigned int varbyt:4;
-  unsigned int spare:1;
-  unsigned int varoffset:11;
-  unsigned int varblk:4;
-} msg_req_data_bit_info;
-
-typedef union
-{
-  msg_req_data_packed_int bytes;
-  msg_req_data_bit_info values;
-} msg_req_data_raw;
-
 msg_req_data_raw msg_req_data;
 
 unsigned long validity_window; // for hi/low + histogram window update
@@ -141,26 +99,14 @@ unsigned long validity_window2;
 byte histogram[64]; // 512 memory usage
 byte histogram_index;
 
-// touch "buttons"
-int btnA,btnB,btnC;
-int btnA_init,btnB_init,btnC_init;
-int btnA_last,btnB_last,btnC_last;
-
-struct btn
-{
-  unsigned int last:1;
-  int init;
-  int value;
-};
-
 btn buttons[3];
 
 // -------------------------------------------------------------
 void setup(void)
 {
   SPI.setSCK(SPI_SCK); // alternate clock pin so we can still use the LED
-  pinMode(led, OUTPUT);
-  digitalWrite(led, 1);
+  pinMode(TEENSY_LED, OUTPUT);
+  digitalWrite(TEENSY_LED, 1);
 
   Can0.begin(CAN_BAUD);
 
@@ -206,16 +152,16 @@ void setup(void)
   myEnc.begin(0, 0, 15);
 
   delay(1000);
-  digitalWrite(led, 0);
+  digitalWrite(TEENSY_LED, 0);
   //commTimer.reset();
 }
 
 // -------------------------------------------------------------
 void loop(void)
 {
-  if (ledTimer.check() && digitalRead(led))
+  if (ledTimer.check() && digitalRead(TEENSY_LED))
   {
-    digitalWrite(led, 0);
+    digitalWrite(TEENSY_LED, 0);
     ledTimer.reset();
   }
   if (gaugeBlinkTimer.check())
@@ -298,31 +244,31 @@ void loop(void)
     switch (rxmsg.id)
     {
       case 1520: // 0
-        RPM=(int)(word(rxmsg.buf[6], rxmsg.buf[7]));
+        gaugeData.RPM=(int)(word(rxmsg.buf[6], rxmsg.buf[7]));
         break;
       case 1521: // 1
-        SPKADV=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+        gaugeData.SPKADV=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
         indicator[0]=rxmsg.buf[3]; // engine
-        AFRtgt=(int)(word(0x00, rxmsg.buf[4]));
+        gaugeData.AFR_tar=(int)(word(0x00, rxmsg.buf[4]));
         break;
       case 1522: // 2
-        Baro=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
-        MAP=(int)(word(rxmsg.buf[2], rxmsg.buf[3]));
-        MAT=(int)(word(rxmsg.buf[4], rxmsg.buf[5]));
-        CLT=(int)(word(rxmsg.buf[6], rxmsg.buf[7]));
+        gaugeData.Baro=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+        gaugeData.MAP=(int)(word(rxmsg.buf[2], rxmsg.buf[3]));
+        gaugeData.MAT=(int)(word(rxmsg.buf[4], rxmsg.buf[5]));
+        gaugeData.CLT=(int)(word(rxmsg.buf[6], rxmsg.buf[7]));
         break;
       case 1523: // 3
-        TPS=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
-        BATTV=(int)(word(rxmsg.buf[2], rxmsg.buf[3]));
+        gaugeData.TPS=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+        gaugeData.BATTV=(int)(word(rxmsg.buf[2], rxmsg.buf[3]));
         break;
       case 1524: // 4
-        Knock=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
-        EGOc=(int)(word(rxmsg.buf[2], rxmsg.buf[3]));
+        gaugeData.Knock=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+        gaugeData.EGOc=(int)(word(rxmsg.buf[2], rxmsg.buf[3]));
         break;
       case 1526: // 6
-        IAC=(int)(word(rxmsg.buf[6], rxmsg.buf[7])); //IAC = (IAC * 49) / 125;
+        gaugeData.IAC=(int)(word(rxmsg.buf[6], rxmsg.buf[7])); //IAC = (IAC * 49) / 125;
       case 1529: // 9
-        dwell=(int)(word(rxmsg.buf[4], rxmsg.buf[5]));
+        gaugeData.dwell=(int)(word(rxmsg.buf[4], rxmsg.buf[5]));
         break;
       case 1530: // 10
         indicator[1]=rxmsg.buf[0]; // status 1
@@ -332,13 +278,13 @@ void loop(void)
         indicator[7]=rxmsg.buf[7]; // status 7
         break;
       case 1537: // 17
-        bstduty=(int)(word(rxmsg.buf[4], rxmsg.buf[5]));
+        gaugeData.bstduty=(int)(word(rxmsg.buf[4], rxmsg.buf[5]));
         break;
       case 1548: // 28
-        idle_tar=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+        gaugeData.idle_tar=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
         break;
       case 1551: // 31
-        AFR=(int)(word(0x00, rxmsg.buf[0]));
+        gaugeData.AFR=(int)(word(0x00, rxmsg.buf[0]));
         //afr = rxmsg.buf[0];
         break;
       case 1574: // 54
@@ -493,21 +439,21 @@ void gauge_histogram()
     {
     // 0-50 value normalization
     case 0:
-      val = (AFR - 100) / 2;  // real rough estimation here here of afr on a 0-50 scale
+      val = (gaugeData.AFR - 100) / 2;  // real rough estimation here here of afr on a 0-50 scale
       if (val > 50)
       {
         val=50;
       }
       break;
     case 1:
-      val = ((MAP/10) - 30) / 4;
+      val = ((gaugeData.MAP/10) - 30) / 4;
       if (val > 50)
       {
         val = 50;
       }
       break;
     case 2:
-      val = (MAT/10) / 4;
+      val = (gaugeData.MAT/10) / 4;
       if (val > 50)
       {
         val = 50;
@@ -541,7 +487,7 @@ void gauge_histogram()
     {
     case 0:
       display.print("AFR ");
-      divby10(AFR);
+      divby10(gaugeData.AFR);
       display.print(tempchars);
       display.drawFastHLine(0, 40, 128, WHITE); // stoich 14.7 line
       for (byte x=1; x < 128; x = x + 2)
@@ -551,7 +497,7 @@ void gauge_histogram()
       break;
     case 1:
       display.print("MAP ");
-      display.print(MAP/10);
+      display.print(gaugeData.MAP/10);
       display.drawFastHLine(0, 47, 128, WHITE); // Baro line.. roughly 98kpa
       for (byte x=1; x < 128; x = x + 2)
       {
@@ -560,7 +506,7 @@ void gauge_histogram()
       break;
     case 2:
       display.print("MAT ");
-      display.print(MAT / 10);
+      display.print(gaugeData.MAT / 10);
       break;
     }
 
@@ -581,11 +527,11 @@ void gauge_histogram()
 
 boolean value_oob()
 {
-  if (RPM > 100)
+  if (gaugeData.RPM > 100)
   {
-    if ((CLT/10) > 260) return 1;
+    if ((gaugeData.CLT/10) > 260) return 1;
     // if (OILP < 7 ) return 1;
-    // if (RPM > 7600 ) return 1;
+    // if (gaugeData.RPM > 7600 ) return 1;
     // if (EGT > 1550 ) return 1;
     // if (indicator[4] != 0) return 1;
   } 
@@ -598,7 +544,7 @@ boolean value_oob()
   {
     return true; // overboost
   }
-  // if (RPM > 6800) 
+  // if (gaugeData.RPM > 6800) 
   // {
   //   return true;
   // }
@@ -612,7 +558,7 @@ void gauge_warning()
 
   display.clearDisplay();;
 
-  if (RPM > 6800)
+  if (gaugeData.RPM > 6800)
   {
     dlength=4;
     llength=3;
@@ -620,7 +566,7 @@ void gauge_warning()
     display.setTextColor(WHITE);
     display.setCursor(midpos,0);
     display.setTextSize(4);
-    display.print(RPM);
+    display.print(gaugeData.RPM);
 
     display.setTextSize(2);
     display.setCursor(8, (63 - 15));
@@ -631,7 +577,7 @@ void gauge_warning()
       leds[i].setRGB(0, 0, 0);
     } // zero out
 
-    byte i = ((RPM - 6800) / 50);
+    byte i = ((gaugeData.RPM - 6800) / 50);
 
     for (byte p=0; p < i; p++)
     {
@@ -648,7 +594,7 @@ void gauge_warning()
     }
   }
 
-  if ((CLT/10) > 260)
+  if ((gaugeData.CLT/10) > 260)
   {
     dlength=3;
     llength=3;
@@ -656,7 +602,7 @@ void gauge_warning()
     display.setTextColor(WHITE);
     display.setCursor(midpos,0);
     display.setTextSize(4);
-    display.print(CLT/10);
+    display.print(gaugeData.CLT/10);
 
     display.setTextSize(2);
     display.setCursor(8, (63 - 15));
@@ -844,7 +790,7 @@ void gauge_vitals()
   display.setCursor(0,0);
 
   display.setCursor(41, 0); // 4 char normally - 4 * 10 = 40, - 128 = 88, /2 = 44
-  display.println(RPM);
+  display.println(gaugeData.RPM);
   display.setTextSize(1);
   display.setCursor(21, 7);
   display.print("RPM");
@@ -855,7 +801,7 @@ void gauge_vitals()
   display.print("AFR");
   display.setCursor(20, 19);
   display.setTextSize(2);
-  divby10(AFR);
+  divby10(gaugeData.AFR);
   display.print(tempchars);
 
   display.setCursor(72, 25);
@@ -863,7 +809,7 @@ void gauge_vitals()
   display.print("CLT");
   display.setCursor(88, 18);
   display.setTextSize(2);
-  display.print(CLT/10);
+  display.print(gaugeData.CLT/10);
 
   //line3
   display.setCursor(0, 40);
@@ -871,7 +817,7 @@ void gauge_vitals()
   display.print("MAP");
   display.setCursor(20, 40);
   display.setTextSize(2);
-  display.print(MAP/10);
+  display.print(gaugeData.MAP/10);
 
   // contextual gauge - if idle on, show IAC%
   if ( bitRead(indicator[2],7) == 1)
@@ -881,9 +827,9 @@ void gauge_vitals()
     display.print("IAC");
     display.setCursor(92, 40);
     display.setTextSize(2);
-    display.print(IAC);
+    display.print(gaugeData.IAC);
   }
-  else if (MAP > Baro)
+  else if (gaugeData.MAP > gaugeData.Baro)
   {
     int psi;
     display.setCursor(72, 38);
@@ -892,7 +838,7 @@ void gauge_vitals()
     display.setCursor(92, 38);
     display.setTextSize(1);
     // 6.895kpa = 1psi
-    psi = MAP - Baro;
+    psi = gaugeData.MAP - gaugeData.Baro;
     psi=(psi * 200) / 1379;
     divby10(psi);
     display.print(tempchars);
@@ -901,7 +847,7 @@ void gauge_vitals()
     display.setTextSize(1);
     display.print("MAT");
     display.setCursor(92, 47);
-    display.print(MAT/10);
+    display.print(gaugeData.MAT/10);
 
   }
   else
@@ -911,7 +857,7 @@ void gauge_vitals()
     display.print("MAT");
     display.setCursor(92,40);
     display.setTextSize(2);
-    display.print(MAT/10);
+    display.print(gaugeData.MAT/10);
   }
 
   gauge_bottom();
@@ -1033,78 +979,78 @@ void gauge_single()
     {
       case 0:
         label="RPM";
-        itoa(RPM, data, 10);
+        itoa(gaugeData.RPM, data, 10);
         break;
       case 1:
         label="AFR";
-        divby10(AFR);
+        divby10(gaugeData.AFR);
         strcpy(data, tempchars);
         break;
       case 2:
         label="Coolant";
-        divby10(CLT);
+        divby10(gaugeData.CLT);
         strcpy(data, tempchars);
         break;
       case 3:
         label="MAP";
-        divby10(MAP);
+        divby10(gaugeData.MAP);
         strcpy(data, tempchars);
         break;
       case 4:
         label="MAT";
-        divby10(MAT);
+        divby10(gaugeData.MAT);
         strcpy(data, tempchars);
         break;
       case 5:
         label="Timing";
-        divby10(SPKADV);
+        divby10(gaugeData.SPKADV);
         strcpy(data, tempchars);
         break;
       case 6:
         label="Voltage";
-        divby10(BATTV);
+        divby10(gaugeData.BATTV);
         strcpy(data, tempchars);
         break;
       case 7:
         label="TPS";
-        divby10(TPS);
+        divby10(gaugeData.TPS);
         strcpy(data, tempchars);
         break;
       case 8:
         label="Knock";
-        divby10(Knock);
+        divby10(gaugeData.Knock);
         strcpy(data, tempchars);
         break;
       case 9:
         label="Barometer";
-        divby10(Baro);
+        divby10(gaugeData.Baro);
         strcpy(data, tempchars);
         break;
       case 10:
         label="EGO Corr";
-        divby10(EGOc);
+        divby10(gaugeData.EGOc);
         strcpy(data, tempchars);
         break;
       case 11:
         label="IAC";
-        itoa(IAC, data, 10);
+        itoa(gaugeData.IAC, data, 10);
         break;
       case 12:
         label="Spark Dwell";
-        divby10(dwell);
+        divby10(gaugeData.dwell);
         strcpy(data, tempchars);
         break;
       case 13:
         label="Boost Duty";
-        itoa(bstduty, data, 10);
+        itoa(gaugeData.bstduty, data, 10);
         break;
       case 14:
         label="Idle Target";
-        itoa(idle_tar, data, 10);
+        itoa(gaugeData.idle_tar, data, 10);
         break;
       case 15:
         label="AFR Target";
-        divby10(AFRtgt);
+        divby10(gaugeData.AFR_tar);
         strcpy(data, tempchars);
         break;
     }
@@ -1157,21 +1103,18 @@ void gauge_single()
   display.setCursor(8, (63 - 15));
   display.print(label);
 
-  // unsigned int MAP_HI, Knock_HI, RPM_HI, CLT_HI, MAT_HI;
-  // int AFR_HI, AFR_LO;
-
   //Additional Hi-Lo's for niftiness
   if (R_index == 0)
   {
     if (millis() > (validity_window + 30000))
     {
       //after 30 seconds from latest high, set new high
-      RPM_HI = RPM;
+      RPM_HI = gaugeData.RPM;
       validity_window=millis();
     }
-    if (RPM > RPM_HI)
+    if (gaugeData.RPM > RPM_HI)
     {
-      RPM_HI = RPM;
+      RPM_HI = gaugeData.RPM;
       validity_window=millis();
     }
     display.setTextSize(2);
@@ -1184,23 +1127,23 @@ void gauge_single()
     if (millis() > (validity_window + 30000))
     {
       //after 30 seconds from latest high, set new high
-      AFR_HI = AFR;
+      AFR_HI = gaugeData.AFR;
       validity_window=millis();
     }
     if (millis() > (validity_window2 + 30000))
     {
       //after 30 seconds from latest high, set new high
-      AFR_LO = AFR;
+      AFR_LO = gaugeData.AFR;
       validity_window2=millis();
     }
-    if (AFR > AFR_HI)
+    if (gaugeData.AFR > AFR_HI)
     {
-      AFR_HI = AFR;
+      AFR_HI = gaugeData.AFR;
       validity_window=millis();
     }
-    if (AFR < AFR_LO)
+    if (gaugeData.AFR < AFR_LO)
     {
-      AFR_LO = AFR;
+      AFR_LO = gaugeData.AFR;
       validity_window2=millis();
     }
     display.setTextSize(2);
@@ -1217,12 +1160,12 @@ void gauge_single()
     if (millis() > (validity_window + 30000))
     {
       //after 30 seconds from latest high, set new high
-      CLT_HI = CLT;
+      CLT_HI = gaugeData.CLT;
       validity_window=millis();
     }
-    if (CLT > CLT_HI)
+    if (gaugeData.CLT > CLT_HI)
     {
-      CLT_HI = CLT;
+      CLT_HI = gaugeData.CLT;
       validity_window=millis();
     }
     display.setTextSize(2);
@@ -1236,12 +1179,12 @@ void gauge_single()
     if (millis() > (validity_window + 30000))
     {
       //after 30 seconds from latest high, set new high
-      MAP_HI = MAP;
+      MAP_HI = gaugeData.MAP;
       validity_window=millis();
     }
-    if (MAP > MAP_HI)
+    if (gaugeData.MAP > MAP_HI)
     {
-      MAP_HI = MAP;
+      MAP_HI = gaugeData.MAP;
       validity_window=millis();
     }
     display.setTextSize(2);
@@ -1255,12 +1198,12 @@ void gauge_single()
     if (millis() > (validity_window + 30000))
     {
       //after 30 seconds from latest high, set new high
-      MAT_HI = MAT;
+      MAT_HI = gaugeData.MAT;
       validity_window=millis();
     }
-    if (MAT > MAT_HI)
+    if (gaugeData.MAT > MAT_HI)
     {
-      MAT_HI = MAT;
+      MAT_HI = gaugeData.MAT;
       validity_window=millis();
     }
     display.setTextSize(2);
@@ -1274,12 +1217,12 @@ void gauge_single()
     if (millis() > (validity_window + 30000))
     {
       //after 30 seconds from latest high, set new high
-      Knock_HI = Knock;
+      Knock_HI = gaugeData.Knock;
       validity_window=millis();
     }
-    if (Knock > Knock_HI)
+    if (gaugeData.Knock > Knock_HI)
     {
-      Knock_HI = Knock;
+      Knock_HI = gaugeData.Knock;
       validity_window=millis();
     }
     display.setTextSize(2);
@@ -1616,40 +1559,39 @@ void neogauge4led(int val, byte led0, byte led1, byte led2, byte led3, byte enab
 void write_neopixel()
 {
   long temp;
-  // unsigned int RPM, AFR, CLT, MAP, MAT, SPKADV, BATTV, TPS, Knock, Baro, EGOc, IAC, dwell, bstduty, idle_tar, AFRtgt;
   // void neogauge4led(int val, byte led0, byte led1, byte led2, byte led3)
   // void neogauge(int val, byte led)
 
-  temp = (RPM * 1000) / REVLIMIT;
+  temp = (gaugeData.RPM * 1000) / REVLIMIT;
   neogauge4led(temp, 1, 0, 15, 14, 1); // RPM min 0 max REVLIMIT
 
-  temp = ((AFR * 2) * 100) / 59;
-  if (AFR <= 147)
+  temp = ((gaugeData.AFR * 2) * 100) / 59;
+  if (gaugeData.AFR <= 147)
   {
-    temp = (pow((AFR - 147),3) / 150) + 500;
+    temp = (pow((gaugeData.AFR - 147),3) / 150) + 500;
   }
-  else if (AFR > 147)
+  else if (gaugeData.AFR > 147)
   {
-    temp = (pow((AFR - 147),3) / 20) + 500;
+    temp = (pow((gaugeData.AFR - 147),3) / 20) + 500;
   }
 
   neogauge4led(temp, 9, 10, 11, 12, 0); // AFR
 
-  temp=TPS;
+  temp=gaugeData.TPS;
   neogauge(temp, 2, 0); //TPS - min 0 max 1000
 
-  temp=(CLT * 5) / 12; //CLT - min ? mid 120 max 240
+  temp=(gaugeData.CLT * 5) / 12; //CLT - min ? mid 120 max 240
   neogauge(temp, 4, 1);
 
 
-  temp=(MAT * 5) / 7; //MAT - min ? mid 70 max 140
+  temp=(gaugeData.MAT * 5) / 7; //MAT - min ? mid 70 max 140
   neogauge(temp, 6, 0);
 
-  temp=MAP/2;
+  temp=gaugeData.MAP/2;
   neogauge(temp, 8, 0); //MAP - min impossible mid 100kpa max 200kpa
 
   // will need to play with this some, 50 looks reasonable though
-  temp=((AFR - AFRtgt) * 50) + 500;
+  temp=((gaugeData.AFR - gaugeData.AFR_tar) * 50) + 500;
   neogauge(temp, 13, 0);
 
   leds[3].setRGB(0, 0, 0); // unallocated
