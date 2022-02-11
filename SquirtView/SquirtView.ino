@@ -35,13 +35,20 @@ struct GaugeData
   unsigned int idle_tar;
   int AFR;
   int AFR_tar;
-};
-
-struct btn
-{
-  unsigned int last:1;
-  int init;
-  int value;
+  unsigned int MAP_highest;
+  unsigned int RPM_highest;
+  unsigned int CLT_highest;
+  unsigned int MAT_highest;
+  unsigned int Knock_highest;
+  int AFR_highest;
+  int AFR_lowest;
+  uint8_t engine;
+  uint8_t CEL;
+  uint8_t status1;
+  uint8_t status2;
+  uint8_t status3;
+  uint8_t status6;
+  uint8_t status7;
 };
 
 // FastLED
@@ -65,19 +72,13 @@ Metro gaugeBlinkTimer = Metro(GAUGE_FLASH_TIMER);
 boolean connectionState = false;
 boolean gaugeBlink = false;
 
-static CAN_message_t txmsg,rxmsg;
-
-// TODO: Organize these better. Maybe in a struct?
 //MS data vars
-byte indicator[7]; // where to store indicator data
 GaugeData gaugeData;
-unsigned int MAP_HI, Knock_HI, RPM_HI, CLT_HI, MAT_HI;
-int AFR_HI, AFR_LO;
 
-uint8_t R_index = 0; // for rotary encoder
-byte B_index = 0; // Button increment
-byte M_index = 0; // Menu increment
-byte S_index = 0; // Select increment
+uint8_t R_index = 0;  // for rotary encoder
+byte B_index = 0;     // Button increment
+byte M_index = 0;     // Menu increment
+byte S_index = 0;     // Select increment
 
 byte neo_brightness = 4;
 byte g_textsize = 1;
@@ -90,6 +91,8 @@ static void ledBlink()
   digitalWrite(TEENSY_LED, 1);
 }
 
+static CAN_message_t txmsg,rxmsg;
+
 msg_packed rxmsg_id,txmsg_id;
 msg_req_data_raw msg_req_data;
 
@@ -98,8 +101,6 @@ unsigned long validity_window2;
 
 byte histogram[64]; // 512 memory usage
 byte histogram_index;
-
-btn buttons[3];
 
 // -------------------------------------------------------------
 void setup(void)
@@ -244,51 +245,50 @@ void loop(void)
     switch (rxmsg.id)
     {
       case 1520: // 0
-        gaugeData.RPM=(int)(word(rxmsg.buf[6], rxmsg.buf[7]));
+        gaugeData.RPM = (int)(word(rxmsg.buf[6], rxmsg.buf[7]));
         break;
       case 1521: // 1
-        gaugeData.SPKADV=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
-        indicator[0]=rxmsg.buf[3]; // engine
-        gaugeData.AFR_tar=(int)(word(0x00, rxmsg.buf[4]));
+        gaugeData.SPKADV = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+        gaugeData.engine = rxmsg.buf[3];
+        gaugeData.AFR_tar = (int)(word(0x00, rxmsg.buf[4]));
         break;
       case 1522: // 2
-        gaugeData.Baro=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
-        gaugeData.MAP=(int)(word(rxmsg.buf[2], rxmsg.buf[3]));
-        gaugeData.MAT=(int)(word(rxmsg.buf[4], rxmsg.buf[5]));
-        gaugeData.CLT=(int)(word(rxmsg.buf[6], rxmsg.buf[7]));
+        gaugeData.Baro = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+        gaugeData.MAP = (int)(word(rxmsg.buf[2], rxmsg.buf[3]));
+        gaugeData.MAT = (int)(word(rxmsg.buf[4], rxmsg.buf[5]));
+        gaugeData.CLT = (int)(word(rxmsg.buf[6], rxmsg.buf[7]));
         break;
       case 1523: // 3
-        gaugeData.TPS=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
-        gaugeData.BATTV=(int)(word(rxmsg.buf[2], rxmsg.buf[3]));
+        gaugeData.TPS = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+        gaugeData.BATTV = (int)(word(rxmsg.buf[2], rxmsg.buf[3]));
         break;
       case 1524: // 4
-        gaugeData.Knock=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
-        gaugeData.EGOc=(int)(word(rxmsg.buf[2], rxmsg.buf[3]));
+        gaugeData.Knock = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+        gaugeData.EGOc = (int)(word(rxmsg.buf[2], rxmsg.buf[3]));
         break;
       case 1526: // 6
-        gaugeData.IAC=(int)(word(rxmsg.buf[6], rxmsg.buf[7])); //IAC = (IAC * 49) / 125;
+        gaugeData.IAC = (int)(word(rxmsg.buf[6], rxmsg.buf[7])); //IAC = (IAC * 49) / 125;
       case 1529: // 9
-        gaugeData.dwell=(int)(word(rxmsg.buf[4], rxmsg.buf[5]));
+        gaugeData.dwell = (int)(word(rxmsg.buf[4], rxmsg.buf[5]));
         break;
       case 1530: // 10
-        indicator[1]=rxmsg.buf[0]; // status 1
-        indicator[2]=rxmsg.buf[1]; // status 2
-        indicator[3]=rxmsg.buf[2]; // status 3
-        indicator[6]=rxmsg.buf[6]; // status 6
-        indicator[7]=rxmsg.buf[7]; // status 7
+        gaugeData.status1 = rxmsg.buf[0];
+        gaugeData.status2 = rxmsg.buf[1];
+        gaugeData.status3 = rxmsg.buf[2];
+        gaugeData.status6 = rxmsg.buf[6];
+        gaugeData.status7 = rxmsg.buf[7];
         break;
       case 1537: // 17
-        gaugeData.bstduty=(int)(word(rxmsg.buf[4], rxmsg.buf[5]));
+        gaugeData.bstduty = (int)(word(rxmsg.buf[4], rxmsg.buf[5]));
         break;
       case 1548: // 28
-        gaugeData.idle_tar=(int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+        gaugeData.idle_tar = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
         break;
       case 1551: // 31
-        gaugeData.AFR=(int)(word(0x00, rxmsg.buf[0]));
-        //afr = rxmsg.buf[0];
+        gaugeData.AFR = (int)(word(0x00, rxmsg.buf[0]));
         break;
       case 1574: // 54
-        indicator[4]=rxmsg.buf[2]; // cel
+        gaugeData.CEL = rxmsg.buf[2];
         break;
       default: 
         // not a broadcast packet
@@ -420,7 +420,6 @@ void ISR_debounce ()
   last_millis = millis();
 }
 
-// TODO: Delete this?
 void gauge_histogram()
 {
   byte val;
@@ -510,18 +509,7 @@ void gauge_histogram()
       break;
     }
 
-    // refresh rate debug
-    // display.setCursor(90, 0);
-    // display.setTextSize(1);
-    // display.setTextColor(WHITE);
-    // display.print("t ");
-    // display.print((millis() - validity_window));
-    // display.setCursor(90, 7);
-    // display.print("v ");
-    // display.print(val);
-
     validity_window=millis();
-    // display.display();
   }
 }
 
@@ -531,16 +519,14 @@ boolean value_oob()
   {
     if ((gaugeData.CLT/10) > 260) return 1;
     // if (OILP < 7 ) return 1;
-    // if (gaugeData.RPM > 7600 ) return 1;
-    // if (EGT > 1550 ) return 1;
-    // if (indicator[4] != 0) return 1;
+    // if (gaugeData.CEL != 0) return 1;
   } 
   else
   {
     return false;
   }
 
-  if ( bitRead(indicator[2],6) == 1)
+  if ( bitRead(gaugeData.status2,6) == 1)
   {
     return true; // overboost
   }
@@ -613,7 +599,7 @@ void gauge_warning()
     }
   }
 
-  if (bitRead(indicator[4], 0))
+  if (bitRead(gaugeData.CEL, 0))
   {
     display.setTextColor(WHITE);
     dlength=3;
@@ -630,7 +616,7 @@ void gauge_warning()
     }
   }
 
-  if (bitRead(indicator[4], 1))
+  if (bitRead(gaugeData.CEL, 1))
   {
     display.setTextColor(WHITE);
     dlength=3;
@@ -648,7 +634,7 @@ void gauge_warning()
 
   }
 
-  if (bitRead(indicator[4], 2))
+  if (bitRead(gaugeData.CEL, 2))
   {
     display.setTextColor(WHITE);
     dlength=3;
@@ -665,7 +651,7 @@ void gauge_warning()
     }
   }
 
-  if (bitRead(indicator[4], 3))
+  if (bitRead(gaugeData.CEL, 3))
   {
     display.setTextColor(WHITE);
     dlength=3;
@@ -683,7 +669,7 @@ void gauge_warning()
 
   }
 
-  if (bitRead(indicator[4], 4))
+  if (bitRead(gaugeData.CEL, 4))
   {
     display.setTextColor(WHITE);
     dlength=3;
@@ -700,7 +686,7 @@ void gauge_warning()
     }
   }
 
-  if (bitRead(indicator[4], 5))
+  if (bitRead(gaugeData.CEL, 5))
   {
     display.setTextColor(WHITE);
     dlength=3;
@@ -717,7 +703,7 @@ void gauge_warning()
     }
   }
 
-  if (bitRead(indicator[4], 6))
+  if (bitRead(gaugeData.CEL, 6))
   {
     display.setTextColor(WHITE);
     dlength=3;
@@ -734,7 +720,7 @@ void gauge_warning()
     }
   }
 
-  if (bitRead(indicator[4], 7))
+  if (bitRead(gaugeData.CEL, 7))
   {
     display.setTextColor(WHITE);
     dlength=3;
@@ -751,7 +737,7 @@ void gauge_warning()
     }
   }
 
-  if ( bitRead(indicator[2],6) == 1)
+  if ( bitRead(gaugeData.status2,6) == 1)
   {
     gauge_danger();
   }
@@ -820,7 +806,7 @@ void gauge_vitals()
   display.print(gaugeData.MAP/10);
 
   // contextual gauge - if idle on, show IAC%
-  if ( bitRead(indicator[2],7) == 1)
+  if ( bitRead(gaugeData.status2,7) == 1)
   {
     display.setCursor(72, 47);
     display.setTextSize(1);
@@ -871,7 +857,7 @@ void gauge_bottom()
   display.setTextColor(BLACK, WHITE);
 
   //CEL
-  if ( indicator[4] != 0 )
+  if ( gaugeData.CEL != 0 )
   {
     display.setTextColor(BLACK, WHITE);
     display.drawFastVLine(2, 57, 8, WHITE);
@@ -885,7 +871,7 @@ void gauge_bottom()
   display.drawFastVLine(1, 57, 8, WHITE);
 
   //Fan
-  if ( bitRead(indicator[6],6) == 1)
+  if ( bitRead(gaugeData.status6,6) == 1)
   {
     display.setTextColor(BLACK, WHITE);
     display.drawFastVLine(23, 57, 8, WHITE);
@@ -901,7 +887,7 @@ void gauge_bottom()
   display.drawFastVLine(21, 57, 8, WHITE);
 
   //Idle
-  if ( bitRead(indicator[2],7) == 1)
+  if ( bitRead(gaugeData.status2,7) == 1)
   {
     display.setTextColor(BLACK, WHITE);
     display.drawFastVLine(44, 57, 8, WHITE);
@@ -915,7 +901,7 @@ void gauge_bottom()
   display.drawFastVLine(43, 57, 8, WHITE);
 
   //Knock
-  if ( bitRead(indicator[7],4) == 1)
+  if ( bitRead(gaugeData.status7,4) == 1)
   {
     display.setTextColor(BLACK, WHITE);
     display.drawFastVLine(65, 57, 8, WHITE);
@@ -931,7 +917,7 @@ void gauge_bottom()
   display.drawFastVLine(63, 57, 8, WHITE);
 
   //Overboost
-  if ( bitRead(indicator[2],6) == 1)
+  if ( bitRead(gaugeData.status2,6) == 1)
   {
     display.setTextColor(BLACK, WHITE);
     display.drawFastVLine(87, 57, 8, WHITE);
@@ -946,7 +932,7 @@ void gauge_bottom()
   display.drawFastVLine(85, 57, 8, WHITE);
 
   //WUE
-  if ( bitRead(indicator[0],3) == 1)
+  if ( bitRead(gaugeData.engine,3) == 1)
   {
     display.setTextColor(BLACK, WHITE);
     display.drawFastVLine(107, 57, 8, WHITE);
@@ -1103,55 +1089,55 @@ void gauge_single()
   display.setCursor(8, (63 - 15));
   display.print(label);
 
-  //Additional Hi-Lo's for niftiness
+  //Additional data for highest/lowest value
   if (R_index == 0)
   {
     if (millis() > (validity_window + 30000))
     {
-      //after 30 seconds from latest high, set new high
-      RPM_HI = gaugeData.RPM;
+      // Highest value resets after 30 seconds
+      gaugeData.RPM_highest = gaugeData.RPM;
       validity_window=millis();
     }
-    if (gaugeData.RPM > RPM_HI)
+    if (gaugeData.RPM > gaugeData.RPM_highest)
     {
-      RPM_HI = gaugeData.RPM;
+      gaugeData.RPM_highest = gaugeData.RPM;
       validity_window=millis();
     }
     display.setTextSize(2);
     display.setCursor((127 - 48), 31);
-    display.print(RPM_HI);
+    display.print(gaugeData.RPM_highest);
   }
 
   if (R_index == 1)
   {
     if (millis() > (validity_window + 30000))
     {
-      //after 30 seconds from latest high, set new high
-      AFR_HI = gaugeData.AFR;
+      // Highest value resets after 30 seconds
+      gaugeData.AFR_highest = gaugeData.AFR;
       validity_window=millis();
     }
     if (millis() > (validity_window2 + 30000))
     {
-      //after 30 seconds from latest high, set new high
-      AFR_LO = gaugeData.AFR;
+      // Highest value resets after 30 seconds
+      gaugeData.AFR_lowest = gaugeData.AFR;
       validity_window2=millis();
     }
-    if (gaugeData.AFR > AFR_HI)
+    if (gaugeData.AFR > gaugeData.AFR_highest)
     {
-      AFR_HI = gaugeData.AFR;
+      gaugeData.AFR_highest = gaugeData.AFR;
       validity_window=millis();
     }
-    if (gaugeData.AFR < AFR_LO)
+    if (gaugeData.AFR < gaugeData.AFR_lowest)
     {
-      AFR_LO = gaugeData.AFR;
+      gaugeData.AFR_lowest = gaugeData.AFR;
       validity_window2=millis();
     }
     display.setTextSize(2);
     display.setCursor(0, 31);
-    divby10(AFR_LO);
+    divby10(gaugeData.AFR_lowest);
     display.print(tempchars);
     display.setCursor((127 - 48), 31);
-    divby10(AFR_HI);
+    divby10(gaugeData.AFR_highest);
     display.print(tempchars);
   }
 
@@ -1159,18 +1145,18 @@ void gauge_single()
    {
     if (millis() > (validity_window + 30000))
     {
-      //after 30 seconds from latest high, set new high
-      CLT_HI = gaugeData.CLT;
+      // Highest value resets after 30 seconds
+      gaugeData.CLT_highest = gaugeData.CLT;
       validity_window=millis();
     }
-    if (gaugeData.CLT > CLT_HI)
+    if (gaugeData.CLT > gaugeData.CLT_highest)
     {
-      CLT_HI = gaugeData.CLT;
+      gaugeData.CLT_highest = gaugeData.CLT;
       validity_window=millis();
     }
     display.setTextSize(2);
     display.setCursor((127 - 60), 31);
-    divby10(CLT_HI);
+    divby10(gaugeData.CLT_highest);
     display.print(tempchars);
   }
 
@@ -1178,18 +1164,18 @@ void gauge_single()
   {
     if (millis() > (validity_window + 30000))
     {
-      //after 30 seconds from latest high, set new high
-      MAP_HI = gaugeData.MAP;
+      // Highest value resets after 30 seconds
+      gaugeData.MAP_highest = gaugeData.MAP;
       validity_window=millis();
     }
-    if (gaugeData.MAP > MAP_HI)
+    if (gaugeData.MAP > gaugeData.MAP_highest)
     {
-      MAP_HI = gaugeData.MAP;
+      gaugeData.MAP_highest = gaugeData.MAP;
       validity_window=millis();
     }
     display.setTextSize(2);
     display.setCursor((127 - 48), 31);
-    divby10(MAP_HI);
+    divby10(gaugeData.MAP_highest);
     display.print(tempchars);
   }
 
@@ -1197,18 +1183,18 @@ void gauge_single()
   {
     if (millis() > (validity_window + 30000))
     {
-      //after 30 seconds from latest high, set new high
-      MAT_HI = gaugeData.MAT;
+      // Highest value resets after 30 seconds
+      gaugeData.MAT_highest = gaugeData.MAT;
       validity_window=millis();
     }
-    if (gaugeData.MAT > MAT_HI)
+    if (gaugeData.MAT > gaugeData.MAT_highest)
     {
-      MAT_HI = gaugeData.MAT;
+      gaugeData.MAT_highest = gaugeData.MAT;
       validity_window=millis();
     }
     display.setTextSize(2);
     display.setCursor((127 - 48), 31);
-    divby10(MAT_HI);
+    divby10(gaugeData.MAT_highest);
     display.print(tempchars);
   }
 
@@ -1216,21 +1202,21 @@ void gauge_single()
   {
     if (millis() > (validity_window + 30000))
     {
-      //after 30 seconds from latest high, set new high
-      Knock_HI = gaugeData.Knock;
+      // Highest value resets after 30 seconds
+      gaugeData.Knock_highest = gaugeData.Knock;
       validity_window=millis();
     }
-    if (gaugeData.Knock > Knock_HI)
+    if (gaugeData.Knock > gaugeData.Knock_highest)
     {
-      Knock_HI = gaugeData.Knock;
+      gaugeData.Knock_highest = gaugeData.Knock;
       validity_window=millis();
     }
     display.setTextSize(2);
     display.setCursor((127 - 48), 31);
-    divby10(Knock_HI);
+    divby10(gaugeData.Knock_highest);
     display.print(tempchars);
   }
-  // display.display();
+  display.display();
 }
 
 void gauge_menu()
@@ -1403,25 +1389,7 @@ void gauge_danger()
   display.print("Danger to");
   display.setCursor(12,45);
   display.println("Manifold");
-  // display.display();
-}
-
-int freeRam ()
-{
-  extern int __heap_start, *__brkval;
-  int v;
-  return (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
-}
-
-void bytePrint(byte victim)
-{
-  boolean temp;
-  Serial.print("b");
-  for (int x = 7; x >=0; x--)
-  {
-    temp=bitRead(victim,x);
-    Serial.print(temp,BIN);
-  }
+  display.display();
 }
 
 void neogauge(int val, byte led, byte enable_warning)
@@ -1559,8 +1527,6 @@ void neogauge4led(int val, byte led0, byte led1, byte led2, byte led3, byte enab
 void write_neopixel()
 {
   long temp;
-  // void neogauge4led(int val, byte led0, byte led1, byte led2, byte led3)
-  // void neogauge(int val, byte led)
 
   temp = (gaugeData.RPM * 1000) / REVLIMIT;
   neogauge4led(temp, 1, 0, 15, 14, 1); // RPM min 0 max REVLIMIT
