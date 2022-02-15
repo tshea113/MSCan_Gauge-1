@@ -154,7 +154,6 @@ void setup(void)
 
   delay(1000);
   digitalWrite(TEENSY_LED, 0);
-  //commTimer.reset();
 }
 
 // -------------------------------------------------------------
@@ -214,13 +213,9 @@ void loop(void)
       case 3:
         gauge_debug();
         break;
-      //case 4:
-      //  gauge_danger();
-      //  break;
       case 4:
         gauge_menu();
         break;
-        //default: write_gauge_3(); break;
       }
       write_neopixel();
 
@@ -518,8 +513,7 @@ boolean value_oob()
   if (gaugeData.RPM > 100)
   {
     if ((gaugeData.CLT/10) > 260) return 1;
-    // if (OILP < 7 ) return 1;
-    // if (gaugeData.CEL != 0) return 1;
+    if (gaugeData.CEL != 0) return 1;
   } 
   else
   {
@@ -530,10 +524,6 @@ boolean value_oob()
   {
     return true; // overboost
   }
-  // if (gaugeData.RPM > 6800) 
-  // {
-  //   return true;
-  // }
   return false;
 }
 
