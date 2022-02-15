@@ -8,7 +8,8 @@
  * to reduce the range, see examples below.
  * Works with all TEENSY 3.x processors.
  *
- * Free to use for everybody - by (ThF) 2017 */
+ * Free to use for everybody - by (ThF) 2017 
+ * Borrowed from: https://forum.pjrc.com/threads/44592-Encoders-(once-more)?p=145056&viewfull=1#post145056 */
 
 template<uint8_t pinA, uint8_t pinB>
 class rotKnob {
