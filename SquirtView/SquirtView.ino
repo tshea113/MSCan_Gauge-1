@@ -13,10 +13,6 @@
 #include "definitions.h"
 #include "constants.h"
 
-#if (SSD1306_LCDHEIGHT != 64)
-#error("Height incorrect, please fix Adafruit_SSD1306.h!");
-#endif
-
 struct GaugeData
 {
   unsigned int RPM;
@@ -58,11 +54,8 @@ CRGB leds[NUM_LEDS];
 rotKnob<ENC_PIN_1, ENC_PIN_2> myEnc;
 volatile unsigned long last_millis;   //switch debouncing
 
-// OLED Display Hardware SPI
-// TODO: New screen uses SPI fix this
-// Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
-
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+// OLED Display I2C
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // Metro ticks are milliseconds
 Metro commTimer = Metro(CAN_TIMEOUT);
@@ -105,7 +98,6 @@ byte histogram_index;
 // -------------------------------------------------------------
 void setup(void)
 {
-  SPI.setSCK(SPI_SCK); // alternate clock pin so we can still use the LED
   pinMode(TEENSY_LED, OUTPUT);
   digitalWrite(TEENSY_LED, 1);
 
@@ -119,9 +111,7 @@ void setup(void)
   FastLED.show();
 
   // By default, we'll generate the high voltage from the 3.3v line internally! (neat!)
-  // TODO: Revert when SPI screen is used.
-  // display.begin(SSD1306_SWITCHCAPVCC);
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
 
   // Show splashscreen
   display.clearDisplay();
