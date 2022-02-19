@@ -1,9 +1,10 @@
 #include <avr/pgmspace.h>
 
 // User configuerable constants
-const int myCANid   = 10;     // CAN ID of this unit
-const int msCANid   = 0;      // CAN ID of the Megasquirt (should almost always be 0)
-const int REVLIMIT  = 6800;   // Soft rev limit at which to start blinking the tach gauge
+const int myCANid     = 10;     // CAN ID of this unit
+const int msCANid     = 0;      // CAN ID of the Megasquirt (should almost always be 0)
+const int REVLIMIT    = 6800;   // Soft rev limit at which to start blinking the tach gauge
+const bool DEBUG_MODE = false;  // Debug mode for testing menus, screens, etc.
 
 // Constants
 const int CAN_TIMEOUT                   = 1000;   // Display an error message if no CAN data during this interval

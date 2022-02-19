@@ -162,7 +162,7 @@ void loop(void)
   }
 
   // See if we have gotten any CAN messages in the last second. display an error if not
-  if (commTimer.check())
+  if (commTimer.check() && !DEBUG_MODE)
   {
     display.clearDisplay();
     display.setTextSize(1);
@@ -182,7 +182,7 @@ void loop(void)
   }
 
   // main display routine
-  if (connectionState && displayTimer.check())
+  if ((connectionState && displayTimer.check()) || DEBUG_MODE)
   {
     if (myEnc.available())
     {
@@ -202,9 +202,6 @@ void loop(void)
         gauge_histogram();
         break;
       case 3:
-        gauge_debug();
-        break;
-      case 4:
         gauge_menu();
         break;
       }
@@ -221,7 +218,7 @@ void loop(void)
   }
 
   // handle received CAN frames
-  if ( Can0.read(rxmsg) )
+  if (Can0.read(rxmsg) && !DEBUG_MODE)
   {
     commTimer.reset();
     connectionState = true;
@@ -369,14 +366,14 @@ void ISR_debounce ()
       display.clearDisplay();;
       return;
     }
-    if (B_index < 4)
+    if (B_index < 3)
     {
       B_index++;
       M_index=0;
       R_index=0;
       myEnc.write(0);
     }
-    if (B_index == 4)
+    if (B_index == 3)
     {
       //menu settings
       if (R_index >= 3)
@@ -774,7 +771,7 @@ void gauge_vitals()
   display.setCursor(72, 25);
   display.setTextSize(1);
   display.print("CLT");
-  display.setCursor(88, 18);
+  display.setCursor(92, 18);
   display.setTextSize(2);
   display.print(gaugeData.CLT/10);
 
