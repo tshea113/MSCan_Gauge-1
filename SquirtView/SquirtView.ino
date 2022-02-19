@@ -128,7 +128,8 @@ void setup(void)
     delay(20);
   }
   delay(200);
-  for (int j = NUM_LEDS; j > -1; j--) 
+  // TODO: Don't like this magic number, maybe have this tied to some brightness variable?
+  for (int j = 16; j > -1; j--) 
   {
     for(int i = 0; i < NUM_LEDS; i++)
     {
