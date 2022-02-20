@@ -4,6 +4,8 @@ MSCan_Gauge
 This project uses a [Teensy 3.1 microcontroller](https://www.pjrc.com/teensy/index.html) to interface with a [Megasquirt 3 open source standalone
 engine controller](http://www.msextra.com/) via CAN bus. Data is both received from the ECU and shown on a display and sent from attached devices back to the ECU.
 
+This project is a continuation of the work done by [merkur2k](https://github.com/merkur2k/MSCan_Gauge), which also expanded on the work done by [openhoon](https://github.com/openhoon/MSCan_Gauge).
+
 ## Hardware used
 * The Teensy has an onboard CAN controller, however it needs a transceiver (Ebay, etc).
 * [Adafruit 128x64 monochrome OLED display](http://www.adafruit.com/products/938) connected via SPI.
