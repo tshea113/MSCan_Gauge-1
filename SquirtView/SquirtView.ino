@@ -47,11 +47,19 @@ struct GaugeData
   uint8_t status7;
 };
 
+struct MenuState
+{
+  bool inMenu = false;
+  uint8_t menuPos = 0;
+};
+
 // FastLED
 CRGB leds[NUM_LEDS];
 
 // Encoder
 rotKnob<ENC_PIN_1, ENC_PIN_2> myEnc;
+int encLastPos;
+bool buttonPressed;
 volatile unsigned long last_millis;   //switch debouncing
 
 // OLED Display I2C
@@ -68,6 +76,8 @@ boolean gaugeBlink = false;
 //MS data vars
 GaugeData gaugeData;
 
+// Menu vars
+MenuState menuState;
 uint8_t R_index = 0;  // for rotary encoder
 byte B_index = 0;     // Button increment
 byte M_index = 0;     // Menu increment
@@ -142,6 +152,8 @@ void setup(void)
   // TODO: This value is chosen because of the number of single gauges. Probably a better way to do this.
   // Encoder has values from 0 to 15
   myEnc.begin(0, 0, 15);
+  encLastPos = myEnc.read();
+  buttonPressed = false;
 
   delay(1000);
   digitalWrite(TEENSY_LED, 0);
@@ -184,34 +196,38 @@ void loop(void)
   // main display routine
   if ((connectionState && displayTimer.check()) || DEBUG_MODE)
   {
-    if (myEnc.available())
-    {
-      R_index=myEnc.read();
-    }
-    if (! value_oob() )
-    {
-      switch (B_index)
-      {
-      case 0:
-        gauge_vitals();
-        break;
-      case 1:
-        gauge_single();
-        break;
-      case 2:
-        gauge_histogram();
-        break;
-      case 3:
-        gauge_menu();
-        break;
-      }
-      write_neopixel();
+    menu_check();
 
-    } 
+    if (menuState.inMenu)
+    {
+      display_menu();
+    }
     else
     {
-      gauge_warning();
-      FastLED.show();
+      if (!value_oob())
+      {
+        switch (menuState.menuPos)
+        {
+        case 0:
+          gauge_dashboard();
+          break;
+        case 1:
+          gauge_single();
+          break;
+        case 2:
+          gauge_histogram();
+          break;
+        case 3:
+          gauge_menu();
+          break;
+        }
+        write_neopixel();
+      } 
+      else
+      {
+        gauge_warning();
+        FastLED.show();
+      }
     }
     display.display();
     displayTimer.reset();
@@ -358,42 +374,10 @@ void ISR_debounce ()
 {
   if((long)(millis() - last_millis) >= (DEBOUNCING_TIME * 10))
   {
-    display.clearDisplay();;
-    if (S_index != 0)
-    {
-      // deselect brightness
-      S_index=0;
-      display.clearDisplay();;
-      return;
-    }
-    if (B_index < 3)
-    {
-      B_index++;
-      M_index=0;
-      R_index=0;
-      myEnc.write(0);
-    }
-    if (B_index == 3)
-    {
-      //menu settings
-      if (R_index >= 3)
-      {
-        //save selected - return to main menu
-        M_index=0;
-        B_index=0;
-        R_index=0;
-        myEnc.write(0);
-        S_index=0;
-      }
-      if (R_index == 1)
-      {
-        S_index=1; // select brightness
-      }
-      if (R_index == 2)
-      {
-        S_index=2; // select text size, though not implemented
-      }
-    } // end B_index5
+    buttonPressed = true;
+    R_index = 0;
+    encLastPos = 0;
+    myEnc.write(0);
   }
   else
   {
@@ -513,6 +497,61 @@ boolean value_oob()
     return true; // overboost
   }
   return false;
+}
+
+void menu_check()
+{
+  if (myEnc.available())
+  {
+    encLastPos = R_index;
+    R_index=myEnc.read();
+  
+    if (menuState.inMenu)
+    {
+      if (R_index > encLastPos && menuState.menuPos < NUM_GAUGES-1)
+      {
+        menuState.menuPos++;
+      }
+      else if (R_index < encLastPos && menuState.menuPos > 0)
+      {
+        menuState.menuPos--;
+      }
+    }
+  }
+
+  // Pressing the button brings up the menu or selects position
+  if (buttonPressed)
+  {
+    if (!menuState.inMenu) menuState.menuPos = 0;
+    menuState.inMenu = !menuState.inMenu;
+    buttonPressed = false;
+  }
+}
+
+void display_menu()
+{
+  menuState.inMenu = true;
+  buttonPressed = false;
+
+  display.clearDisplay();
+  display.setTextSize(1);
+
+  for (int i = 0; i < NUM_GAUGES; i++)
+  {
+    if (menuState.menuPos == i)
+    {
+      display.setTextColor(BLACK, WHITE);
+      display.setCursor(2, (10 * i) + 2);
+      display.print(GAUGES[i]);
+    }
+    else
+    {
+      display.setTextColor(WHITE);
+      display.setCursor(2, (10 * i) + 2);
+      display.print(GAUGES[i]);
+    }
+
+  }
 }
 
 void gauge_warning()
@@ -740,14 +779,14 @@ void gauge_debug()
   display.display();
 }
 
-void gauge_vitals()
+void gauge_dashboard()
 {
   //hard coded for style
   // fonts are 5x7 * textsize
   // size 1 .. 5 x 7
   // size 2 .. 10 x 14
   //Vitals - AFR, RPM, MAP,
-  display.clearDisplay();;
+  display.clearDisplay();
 
   display.setTextSize(2);
   display.setTextColor(WHITE);

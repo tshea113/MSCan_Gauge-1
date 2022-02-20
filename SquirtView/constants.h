@@ -12,12 +12,15 @@ const int DISPLAY_REFRESH               = 100;    // Refresh the display at this
 const int LED_FLASH_TIMER               = 1;      // How long to flash the led upon CAN frame receive/transmit
 const int GAUGE_FLASH_TIMER             = 100;    // Blink the led ring pixels during certain conditions
 const int NUM_LEDS                      = 16;     // Number of LEDs on the NeoPixel ring
-const unsigned long DEBOUNCING_TIME     = 150;    // Debouncing Time - 150 is good, 200 is better, 250 seems worse
+const unsigned long DEBOUNCING_TIME     = 50;    // Debouncing Time - 150 is good, 200 is better, 250 seems worse
 const int OLED_HEIGHT                   = 64;     // Height of the OLED screen in pixels
 const int OLED_WIDTH                    = 128;    // Width of the OLED screen in pixels
 const int CAN_BAUD                      = 500000; // CAN baud rate
 const int MS_DATA_NAME_MAX_LENGTH       = 10;     // Maximum length of MS data field name
 const int MS_DATA_BIN_NAME_MAX_LENGTH   = 14;     // Maximum length of MS data field name
+const int NUM_GAUGES                    = 3;      // Number of gauge formats
+
+const String GAUGES[NUM_GAUGES] = {"Dashboard", "Single", "Graph"};
 
 // Program memory constants
 struct ledval
