@@ -1,6 +1,6 @@
 /* Compact and quick encoder class for these horribly bouncing
  * cheap rotary knobs with 4 transitions per click.
- * Default range is from -128 to +127 starting at 0.
+ * Default range is from 0 to 65,535 starting at 0.
  *
  * Might be initialized with begin(startVal); to start at
  * a predefined number.
@@ -12,9 +12,11 @@
  * Borrowed from: https://forum.pjrc.com/threads/44592-Encoders-(once-more)?p=145056&viewfull=1#post145056 */
 
 template<uint8_t pinA, uint8_t pinB>
-class rotKnob {
+class rotKnob
+{
 public:
-	void begin(int8_t startVal, int8_t lowBound, int8_t hiBound) {
+	void begin(uint16_t startVal, uint16_t lowBound, uint16_t hiBound)
+	{
 		d._sValue = startVal;
 		d._lBound = lowBound;
 		d._hBound = hiBound;
@@ -28,43 +30,53 @@ public:
 		attachInterrupt(pinA, intPinA, CHANGE);
 		attachInterrupt(pinB, intPinB, CHANGE);
 	}
-	void begin(int8_t startVal) {
+	void begin(uint16_t startVal)
+	{
 		begin(startVal, -128, 127);
 	}
-	void begin() {
-		begin(0, -128, 127);
+	void begin()
+	{
+		begin(0, 0, 65535);
 	}
-	void end() {
+	void end()
+	{
 		detachInterrupt(pinA);
 		detachInterrupt(pinB);
 	}
-	int8_t read() {
+	uint16_t read()
+	{
 		d._avail = false;
 		return d._sValue;
 	}
-	void write(int8_t newVal) {
+	void write(uint16_t newVal)
+	{
 		d._sValue = newVal;
 		return;
 	}
-	bool available() {
+	bool available()
+	{
 		return d._avail;
 	}
 private:
-	struct objData {
+	struct objData
+	{
 		volatile uint32_t* _aConf, *_bConf;
-		volatile int8_t _lBound, _hBound, _sValue;
+		volatile uint16_t _lBound, _hBound, _sValue;
 		volatile bool _aVal, _bVal, _avail;
 	};
 	static objData d;
-	static void intPinA() {
+	static void intPinA()
+	{
 		*d._aConf &= ~0x000F0000; // disable pin A interrupts
     // decoding logic
 		if (!d._aVal) {
-			if ((d._sValue < d._hBound) && !d._bVal) {
+			if ((d._sValue < d._hBound) && !d._bVal)
+			{
 				d._sValue++;
 				d._avail = true;
 			}
-			if ((d._sValue > d._lBound) && d._bVal) {
+			if ((d._sValue > d._lBound) && d._bVal)
+			{
 				d._sValue--;
 				d._avail = true;
 			}
@@ -72,7 +84,8 @@ private:
 		d._bVal = digitalReadFast(pinB); // read pinB which is stable after pinA transition
 		*d._bConf |= 0x000B0000; // (re-) enable pinB interrupts
 	}
-	static void intPinB() {
+	static void intPinB()
+	{
 		*d._bConf &= ~0x000F0000; // disable pinB interrupts
 		d._aVal = digitalReadFast(pinA); // read pinA which is stable after pinB transition
 		*d._aConf |= 0x000B0000; // (re-) enable pinA interrupts

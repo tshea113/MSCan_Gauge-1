@@ -1,6 +1,5 @@
 #include <Metro.h>
 #include <FlexCAN.h>
-#include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -12,46 +11,16 @@
 #include "MegasquirtMessages.h"
 #include "definitions.h"
 #include "constants.h"
-
-struct GaugeData
-{
-  unsigned int RPM;
-  unsigned int CLT;
-  unsigned int MAP;
-  unsigned int MAT;
-  unsigned int SPKADV;
-  unsigned int BATTV;
-  unsigned int TPS;
-  unsigned int Knock;
-  unsigned int Baro;
-  unsigned int EGOc;
-  unsigned int IAC;
-  unsigned int dwell;
-  unsigned int bstduty;
-  unsigned int idle_tar;
-  int AFR;
-  int AFR_tar;
-  unsigned int MAP_highest;
-  unsigned int RPM_highest;
-  unsigned int CLT_highest;
-  unsigned int MAT_highest;
-  unsigned int Knock_highest;
-  int AFR_highest;
-  int AFR_lowest;
-  uint8_t engine;
-  uint8_t CEL;
-  uint8_t status1;
-  uint8_t status2;
-  uint8_t status3;
-  uint8_t status6;
-  uint8_t status7;
-};
+#include "GaugeData.h"
 
 // FastLED
 CRGB leds[NUM_LEDS];
 
 // Encoder
 rotKnob<ENC_PIN_1, ENC_PIN_2> myEnc;
+uint16_t encoderIndex;
+uint16_t encLastPos;
+bool buttonPressed;
 volatile unsigned long last_millis;   //switch debouncing
 
 // OLED Display I2C
@@ -68,10 +37,8 @@ boolean gaugeBlink = false;
 //MS data vars
 GaugeData gaugeData;
 
-uint8_t R_index = 0;  // for rotary encoder
-byte B_index = 0;     // Button increment
-byte M_index = 0;     // Menu increment
-byte S_index = 0;     // Select increment
+// Menu vars
+MenuState menuState;
 
 byte neo_brightness = 4;
 byte g_textsize = 1;
@@ -139,9 +106,12 @@ void setup(void)
     delay(20);
   }
 
-  // TODO: This value is chosen because of the number of single gauges. Probably a better way to do this.
-  // Encoder has values from 0 to 15
-  myEnc.begin(0, 0, 15);
+  // Encoder has values from 0 to 65,535
+  // This is probably reasonably large enough for basic use, but I can see this
+  // being an issue if the edge values are reached in normal use.
+  myEnc.begin();
+  encLastPos = myEnc.read();
+  buttonPressed = false;
 
   delay(1000);
   digitalWrite(TEENSY_LED, 0);
@@ -162,7 +132,7 @@ void loop(void)
   }
 
   // See if we have gotten any CAN messages in the last second. display an error if not
-  if (commTimer.check())
+  if (commTimer.check() && !DEBUG_MODE)
   {
     display.clearDisplay();
     display.setTextSize(1);
@@ -182,46 +152,53 @@ void loop(void)
   }
 
   // main display routine
-  if (connectionState && displayTimer.check())
+  if ((connectionState && displayTimer.check()) || DEBUG_MODE)
   {
-    if (myEnc.available())
-    {
-      R_index=myEnc.read();
-    }
-    if (! value_oob() )
-    {
-      switch (B_index)
-      {
-      case 0:
-        gauge_vitals();
-        break;
-      case 1:
-        gauge_single();
-        break;
-      case 2:
-        gauge_histogram();
-        break;
-      case 3:
-        gauge_debug();
-        break;
-      case 4:
-        gauge_menu();
-        break;
-      }
-      write_neopixel();
+    menu_check();
 
-    } 
+    if (menuState.inMenu)
+    {
+      if (menuState.inSettings)
+      {
+        display_settings();
+      }
+      else
+      {
+        display_menu();
+      }
+    }
     else
     {
-      gauge_warning();
-      FastLED.show();
+      if (!value_oob())
+      {
+        switch (menuState.menuPos)
+        {
+        case 0:
+          gauge_dashboard();
+          break;
+        case 1:
+          gauge_single();
+          break;
+        case 2:
+          gauge_graph();
+          break;
+        default:
+          Serial.println("Invalid view!");
+        }
+        write_neopixel();
+      } 
+      else
+      {
+        gauge_warning();
+        FastLED.show();
+      }
     }
     display.display();
     displayTimer.reset();
   }
 
   // handle received CAN frames
-  if ( Can0.read(rxmsg) )
+  if (Can0.read(rxmsg) && !DEBUG_MODE)
   {
     commTimer.reset();
     connectionState = true;
@@ -361,42 +338,10 @@ void ISR_debounce ()
 {
   if((long)(millis() - last_millis) >= (DEBOUNCING_TIME * 10))
   {
-    display.clearDisplay();;
-    if (S_index != 0)
-    {
-      // deselect brightness
-      S_index=0;
-      display.clearDisplay();;
-      return;
-    }
-    if (B_index < 4)
-    {
-      B_index++;
-      M_index=0;
-      R_index=0;
-      myEnc.write(0);
-    }
-    if (B_index == 4)
-    {
-      //menu settings
-      if (R_index >= 3)
-      {
-        //save selected - return to main menu
-        M_index=0;
-        B_index=0;
-        R_index=0;
-        myEnc.write(0);
-        S_index=0;
-      }
-      if (R_index == 1)
-      {
-        S_index=1; // select brightness
-      }
-      if (R_index == 2)
-      {
-        S_index=2; // select text size, though not implemented
-      }
-    } // end B_index5
+    buttonPressed = true;
+    encoderIndex = 0;
+    encLastPos = 0;
+    myEnc.write(0);
   }
   else
   {
@@ -404,99 +349,6 @@ void ISR_debounce ()
     return;
   }
   last_millis = millis();
-}
-
-void gauge_histogram()
-{
-  byte val;
-
-  // 10hz update time
-  if (millis() > (validity_window + 80))
-  {
-    display.clearDisplay();;
-
-    if (R_index > 2 || R_index < 0)
-    {
-      R_index=0;
-      myEnc.write(0);
-    }
-    switch (R_index)
-    {
-    // 0-50 value normalization
-    case 0:
-      val = (gaugeData.AFR - 100) / 2;  // real rough estimation here here of afr on a 0-50 scale
-      if (val > 50)
-      {
-        val=50;
-      }
-      break;
-    case 1:
-      val = ((gaugeData.MAP/10) - 30) / 4;
-      if (val > 50)
-      {
-        val = 50;
-      }
-      break;
-    case 2:
-      val = (gaugeData.MAT/10) / 4;
-      if (val > 50)
-      {
-        val = 50;
-      }
-      break;
-    }
-
-    histogram_index++;
-    if (histogram_index >=64)
-    {
-      histogram_index=0;
-    }
-    histogram[histogram_index]=val;
-
-    for (byte i = 0; i < 64; i++)
-    {
-      int x = histogram_index - i;
-      if ( x < 0)
-      {
-        x = 64 + histogram_index - i;
-      }
-      display.drawFastVLine((128 - (i * 2)), (64 - histogram[x]), 64, WHITE);
-      display.drawFastVLine((127 - (i * 2)), (64 - histogram[x]), 64, WHITE);
-    }
-
-    display.setCursor(8,0);
-    display.setTextSize(2);
-    display.setTextColor(WHITE);
-
-    switch (R_index)
-    {
-    case 0:
-      display.print("AFR ");
-      divby10(gaugeData.AFR);
-      display.print(tempchars);
-      display.drawFastHLine(0, 40, 128, WHITE); // stoich 14.7 line
-      for (byte x=1; x < 128; x = x + 2)
-      {
-        display.drawPixel(x, 40, BLACK);
-      }
-      break;
-    case 1:
-      display.print("MAP ");
-      display.print(gaugeData.MAP/10);
-      display.drawFastHLine(0, 47, 128, WHITE); // Baro line.. roughly 98kpa
-      for (byte x=1; x < 128; x = x + 2)
-      {
-        display.drawPixel(x, 47, BLACK);
-      }
-      break;
-    case 2:
-      display.print("MAT ");
-      display.print(gaugeData.MAT / 10);
-      break;
-    }
-
-    validity_window=millis();
-  }
 }
 
 boolean value_oob()
@@ -516,6 +368,95 @@ boolean value_oob()
     return true; // overboost
   }
   return false;
+}
+
+void menu_check()
+{
+  // Pressing the button brings up the menu or selects position
+  if (buttonPressed)
+  {
+    if (menuState.inSettings)
+    {
+      if (menuState.settingsPos == NUM_SETTINGS-1)
+      {
+        menuState.settingsPos = 0;
+        menuState.menuPos = 0;
+        menuState.inSettings = false;
+      }
+    }
+    else
+    {
+      if (menuState.menuPos == NUM_VIEWS-1)
+      {
+        menuState.inSettings = true;
+      }
+      else
+      {
+        if (!menuState.inMenu) menuState.menuPos = 0;
+        menuState.inMenu = !menuState.inMenu;
+      }
+    }
+
+    buttonPressed = false;
+  }
+}
+
+void display_menu()
+{
+  // Check for rotations
+  if (myEnc.available())
+  {
+    encLastPos = encoderIndex;
+    encoderIndex=myEnc.read();
+
+    if (encoderIndex > encLastPos && menuState.menuPos < NUM_VIEWS - 1)
+    {
+      menuState.menuPos++;
+    }
+    else if (encoderIndex < encLastPos && menuState.menuPos > 0)
+    {
+      menuState.menuPos--;
+    }
+
+    if (DEBUG_MODE)
+    {
+      Serial.print("Menu: ");
+      Serial.println(menuState.menuPos);
+    }
+  }
+
+  display.clearDisplay();
+  print_menu(VIEWS, NUM_VIEWS, menuState.menuPos);
+  display.display();
+}
+
+void display_settings()
+{
+  // Check for rotations
+  if (myEnc.available())
+  {
+    encLastPos = encoderIndex;
+    encoderIndex=myEnc.read();
+
+    if (encoderIndex > encLastPos && menuState.settingsPos < NUM_SETTINGS - 1)
+    {
+      menuState.settingsPos++;
+    }
+    else if (encoderIndex < encLastPos && menuState.settingsPos > 0)
+    {
+      menuState.settingsPos--;
+    }
+
+    if (DEBUG_MODE)
+    {
+      Serial.print("Settings: ");
+      Serial.println(menuState.settingsPos);
+    }
+  }
+
+  display.clearDisplay();
+  print_menu(SETTINGS, NUM_SETTINGS, menuState.settingsPos);
+  display.display();
 }
 
 void gauge_warning()
@@ -725,32 +666,14 @@ void gauge_warning()
 
 }
 
-void gauge_debug()
-{
-  display.clearDisplay();;
-  display.setCursor(32,0);
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  display.print("m");
-  display.print(M_index);
-  display.print("r");
-  display.print(R_index);
-  display.print("s");
-  display.print(S_index);
-  display.print("b");
-  display.println(B_index);
-
-  display.display();
-}
-
-void gauge_vitals()
+void gauge_dashboard()
 {
   //hard coded for style
   // fonts are 5x7 * textsize
   // size 1 .. 5 x 7
   // size 2 .. 10 x 14
   //Vitals - AFR, RPM, MAP,
-  display.clearDisplay();;
+  display.clearDisplay();
 
   display.setTextSize(2);
   display.setTextColor(WHITE);
@@ -774,7 +697,7 @@ void gauge_vitals()
   display.setCursor(72, 25);
   display.setTextSize(1);
   display.print("CLT");
-  display.setCursor(88, 18);
+  display.setCursor(92, 18);
   display.setTextSize(2);
   display.print(gaugeData.CLT/10);
 
@@ -789,7 +712,7 @@ void gauge_vitals()
   // contextual gauge - if idle on, show IAC%
   if ( bitRead(gaugeData.status2,7) == 1)
   {
-    display.setCursor(72, 47);
+    display.setCursor(72, 40);
     display.setTextSize(1);
     display.print("IAC");
     display.setCursor(92, 40);
@@ -810,7 +733,7 @@ void gauge_vitals()
     divby10(psi);
     display.print(tempchars);
 
-    display.setCursor(72, 47);
+    display.setCursor(72, 40);
     display.setTextSize(1);
     display.print("MAT");
     display.setCursor(92, 47);
@@ -819,7 +742,7 @@ void gauge_vitals()
   }
   else
   {
-    display.setCursor(72, 47);
+    display.setCursor(72, 40);
     display.setTextSize(1);
     display.print("MAT");
     display.setCursor(92,40);
@@ -940,92 +863,111 @@ void gauge_single()
   byte temp_index;
   display.clearDisplay();
 
-  // if (R_index <= 15)
-  // {
-    switch (R_index)
+  // Check for rotations
+  if (myEnc.available())
+  {
+    encLastPos = encoderIndex;
+    encoderIndex=myEnc.read();
+  
+    if (encoderIndex > encLastPos && menuState.gaugeSinglePos < NUM_GAUGES - 1)
     {
-      case 0:
-        label="RPM";
-        itoa(gaugeData.RPM, data, 10);
-        break;
-      case 1:
-        label="AFR";
-        divby10(gaugeData.AFR);
-        strcpy(data, tempchars);
-        break;
-      case 2:
-        label="Coolant";
-        divby10(gaugeData.CLT);
-        strcpy(data, tempchars);
-        break;
-      case 3:
-        label="MAP";
-        divby10(gaugeData.MAP);
-        strcpy(data, tempchars);
-        break;
-      case 4:
-        label="MAT";
-        divby10(gaugeData.MAT);
-        strcpy(data, tempchars);
-        break;
-      case 5:
-        label="Timing";
-        divby10(gaugeData.SPKADV);
-        strcpy(data, tempchars);
-        break;
-      case 6:
-        label="Voltage";
-        divby10(gaugeData.BATTV);
-        strcpy(data, tempchars);
-        break;
-      case 7:
-        label="TPS";
-        divby10(gaugeData.TPS);
-        strcpy(data, tempchars);
-        break;
-      case 8:
-        label="Knock";
-        divby10(gaugeData.Knock);
-        strcpy(data, tempchars);
-        break;
-      case 9:
-        label="Barometer";
-        divby10(gaugeData.Baro);
-        strcpy(data, tempchars);
-        break;
-      case 10:
-        label="EGO Corr";
-        divby10(gaugeData.EGOc);
-        strcpy(data, tempchars);
-        break;
-      case 11:
-        label="IAC";
-        itoa(gaugeData.IAC, data, 10);
-        break;
-      case 12:
-        label="Spark Dwell";
-        divby10(gaugeData.dwell);
-        strcpy(data, tempchars);
-        break;
-      case 13:
-        label="Boost Duty";
-        itoa(gaugeData.bstduty, data, 10);
-        break;
-      case 14:
-        label="Idle Target";
-        itoa(gaugeData.idle_tar, data, 10);
-        break;
-      case 15:
-        label="AFR Target";
-        divby10(gaugeData.AFR_tar);
-        strcpy(data, tempchars);
-        break;
+      menuState.gaugeSinglePos++;
     }
+    else if (encoderIndex < encLastPos && menuState.gaugeSinglePos > 0)
+    {
+      menuState.gaugeSinglePos--;
+    }
+    if (DEBUG_MODE)
+    {
+      Serial.print("Single: ");
+      Serial.println(menuState.gaugeSinglePos);
+    }
+  }
+
+  switch (menuState.gaugeSinglePos)
+  {
+    case 0:
+      label="RPM";
+      itoa(gaugeData.RPM, data, 10);
+      break;
+    case 1:
+      label="AFR";
+      divby10(gaugeData.AFR);
+      strcpy(data, tempchars);
+      break;
+    case 2:
+      label="Coolant";
+      divby10(gaugeData.CLT);
+      strcpy(data, tempchars);
+      break;
+    case 3:
+      label="MAP";
+      divby10(gaugeData.MAP);
+      strcpy(data, tempchars);
+      break;
+    case 4:
+      label="MAT";
+      divby10(gaugeData.MAT);
+      strcpy(data, tempchars);
+      break;
+    case 5:
+      label="Timing";
+      divby10(gaugeData.SPKADV);
+      strcpy(data, tempchars);
+      break;
+    case 6:
+      label="Voltage";
+      divby10(gaugeData.BATTV);
+      strcpy(data, tempchars);
+      break;
+    case 7:
+      label="TPS";
+      divby10(gaugeData.TPS);
+      strcpy(data, tempchars);
+      break;
+    case 8:
+      label="Knock";
+      divby10(gaugeData.Knock);
+      strcpy(data, tempchars);
+      break;
+    case 9:
+      label="Barometer";
+      divby10(gaugeData.Baro);
+      strcpy(data, tempchars);
+      break;
+    case 10:
+      label="EGO Corr";
+      divby10(gaugeData.EGOc);
+      strcpy(data, tempchars);
+      break;
+    case 11:
+      label="IAC";
+      itoa(gaugeData.IAC, data, 10);
+      break;
+    case 12:
+      label="Spark Dwell";
+      divby10(gaugeData.dwell);
+      strcpy(data, tempchars);
+      break;
+    case 13:
+      label="Boost Duty";
+      itoa(gaugeData.bstduty, data, 10);
+      break;
+    case 14:
+      label="Idle Target";
+      itoa(gaugeData.idle_tar, data, 10);
+      break;
+    case 15:
+      label="AFR Target";
+      divby10(gaugeData.AFR_tar);
+      strcpy(data, tempchars);
+      break;
+  }
   // }
   // TODO: I'm not sure if this is even needed. Need to figure out if this data is useful. If so the data should loop properly. Maybe update the UI for this a bit?
   // else
   // {
-  //   temp_index = R_index - 15;
+  //   temp_index = encoderIndex - 15;
   //   char temporary[15];
   //   byte sbyte, bitp, dbit;
   //   strcpy_P(temporary, MSDataBin[temp_index].name);
@@ -1071,7 +1013,7 @@ void gauge_single()
   display.print(label);
 
   //Additional data for highest/lowest value
-  if (R_index == 0)
+  if (menuState.gaugeSinglePos == 0)
   {
     if (millis() > (validity_window + 30000))
     {
@@ -1089,7 +1031,7 @@ void gauge_single()
     display.print(gaugeData.RPM_highest);
   }
 
-  if (R_index == 1)
+  if (menuState.gaugeSinglePos == 1)
   {
     if (millis() > (validity_window + 30000))
     {
@@ -1122,7 +1064,7 @@ void gauge_single()
     display.print(tempchars);
   }
 
-  if (R_index == 2)
+  if (menuState.gaugeSinglePos == 2)
    {
     if (millis() > (validity_window + 30000))
     {
@@ -1141,7 +1083,7 @@ void gauge_single()
     display.print(tempchars);
   }
 
-  if (R_index == 3)
+  if (menuState.gaugeSinglePos == 3)
   {
     if (millis() > (validity_window + 30000))
     {
@@ -1160,7 +1102,7 @@ void gauge_single()
     display.print(tempchars);
   }
 
-  if (R_index == 4)
+  if (menuState.gaugeSinglePos == 4)
   {
     if (millis() > (validity_window + 30000))
     {
@@ -1179,7 +1121,7 @@ void gauge_single()
     display.print(tempchars);
   }
 
-  if (R_index == 8)
+  if (menuState.gaugeSinglePos == 8)
   {
     if (millis() > (validity_window + 30000))
     {
@@ -1200,157 +1142,115 @@ void gauge_single()
   display.display();
 }
 
-void gauge_menu()
+void gauge_graph()
 {
-  display.setTextColor(WHITE);
-  display.clearDisplay();
-  display.setCursor(0,0);
-  display.setTextSize(2);
-
-  if (S_index == 0) // Nothing selected
+  byte val;
+  
+  // Check for rotations
+  if (myEnc.available())
   {
-    if (R_index > 3)
+    encLastPos = encoderIndex;
+    encoderIndex=myEnc.read();
+  
+    if (encoderIndex > encLastPos && menuState.gaugeGraphPos < NUM_GRAPHS - 1)
     {
-      R_index = 3;
+      menuState.gaugeGraphPos++;
     }
-    switch (R_index)
+    else if (encoderIndex < encLastPos && menuState.gaugeGraphPos > 0)
     {
-      case 0:
-        //line1
-        display.setTextColor(BLACK, WHITE);
-        display.println("_Menu");
-        //line2
-        display.setTextColor(WHITE);
-        display.print("Lum: ");
-        display.println(neo_brightness);
-        //line3
-        display.print("Text: ");
-        display.println(g_textsize);
-        //line4
-        display.print("Save");
-        display.display();
-        break;
+      menuState.gaugeGraphPos--;
+    }
 
-      case 1: // Brightness highlighted
-        //line1
-        display.setTextColor(WHITE);
-        display.println("_Menu");
-        //line2
-        display.setTextColor(BLACK, WHITE);
-        display.print("Lum: ");
-        display.println(neo_brightness);
-        //line3
-        display.setTextColor(WHITE);
-        display.print("Text: ");
-        display.println(g_textsize);
-        //line4
-        display.print("Save");
-        display.display();
-        break;
+    if (DEBUG_MODE)
+    {
+      Serial.print("Graph: ");
+      Serial.println(menuState.gaugeGraphPos);
+    }
+  }
 
-      case 2: // Text size highlighted
-        //line1
-        display.setTextColor(WHITE);
-        display.println("_Menu");
-        //line2
-        display.print("Lum: ");
-        display.println(neo_brightness);
-        //line3
-        display.setTextColor(BLACK, WHITE);
-        display.print("Text: ");
-        display.println(g_textsize);
-        //line4
-        display.setTextColor(WHITE);
-        display.print("Save");
-        display.display();
-        break;
-
-      case 3: // Save highlighted
-        //line1
-        display.setTextColor(WHITE);
-        display.println("_Menu");
-        //line2
-        display.print("Lum: ");
-        display.println(neo_brightness);
-        //line3
-        display.setTextColor(WHITE);
-        display.print("Text: ");
-        display.println(g_textsize);
-        //line4
-        display.setTextColor(BLACK, WHITE);
-        display.print("Save");
-        display.display();
-        break;
-    } // end switch
-  } // end Nothing selected
-
-  if (S_index == 1) // Brightness Selected
+  // 10hz update time
+  if (millis() > (validity_window + 80))
   {
-    neo_brightness=R_index;
-    display.clearDisplay();;
-    display.setCursor(0,0);
-    if (R_index > 8)
+    display.clearDisplay();
+
+    switch (menuState.gaugeGraphPos)
     {
-      R_index = 8;
-      myEnc.write(8);
-      neo_brightness = 8;
-    }
-    if (R_index < 1)
-    {
-      R_index = 1;
-      myEnc.write(1);
-      neo_brightness=1;
+    // 0-50 value normalization
+    case 0:
+      val = (gaugeData.AFR - 100) / 2;  // real rough estimation here here of afr on a 0-50 scale
+      if (val > 50)
+      {
+        val = 50;
+      }
+      break;
+    case 1:
+      val = ((gaugeData.MAP/10) - 30) / 4;
+      if (val > 50)
+      {
+        val = 50;
+      }
+      break;
+    case 2:
+      val = (gaugeData.MAT/10) / 4;
+      if (val > 50)
+      {
+        val = 50;
+      }
+      break;
     }
 
-    //line1
-    display.setTextColor(WHITE);
-    display.println("_Menu");
-    //line2
-    display.setTextColor(BLACK, WHITE);
-    display.print("Lum: ");
-    display.println(neo_brightness);
-    //line3
-    display.setTextColor(WHITE);
-    display.print("Text: ");
-    display.println(g_textsize);
-    //line4
-    display.print("Save");
-    display.display();
-  }// Brightness selected
-
-  if (S_index == 2)
-  {
-    // temp=M_index;
-    g_textsize=R_index;
-    if (R_index > 4)
+    histogram_index++;
+    if (histogram_index >=64)
     {
-      R_index = 4;
-      myEnc.write(4);
-      g_textsize = 4;
+      histogram_index=0;
     }
-    if (R_index < 1)
+    histogram[histogram_index]=val;
+
+    for (byte i = 0; i < 64; i++)
     {
-      R_index = 1;
-      myEnc.write(1);
-      g_textsize=1;
+      int x = histogram_index - i;
+      if ( x < 0)
+      {
+        x = 64 + histogram_index - i;
+      }
+      display.drawFastVLine((128 - (i * 2)), (64 - histogram[x]), 64, WHITE);
+      display.drawFastVLine((127 - (i * 2)), (64 - histogram[x]), 64, WHITE);
     }
 
-    //line1
+    display.setCursor(8,0);
+    display.setTextSize(2);
     display.setTextColor(WHITE);
-    display.println("_Menu");
-    //line2
-    display.print("Lum: ");
-    display.println(neo_brightness);
-    //line3
-    display.setTextColor(BLACK, WHITE);
-    display.print("Text: ");
-    display.println(g_textsize);
-    //line4
-    display.setTextColor(WHITE);
-    display.print("Save");
-    display.display();
-  } // Text size selected
-} // end gauge_menu
+
+    switch (menuState.gaugeGraphPos)
+    {
+    case 0:
+      display.print("AFR ");
+      divby10(gaugeData.AFR);
+      display.print(tempchars);
+      display.drawFastHLine(0, 40, 128, WHITE); // stoich 14.7 line
+      for (byte x=1; x < 128; x = x + 2)
+      {
+        display.drawPixel(x, 40, BLACK);
+      }
+      break;
+    case 1:
+      display.print("MAP ");
+      display.print(gaugeData.MAP/10);
+      display.drawFastHLine(0, 47, 128, WHITE); // Baro line.. roughly 98kpa
+      for (byte x=1; x < 128; x = x + 2)
+      {
+        display.drawPixel(x, 47, BLACK);
+      }
+      break;
+    case 2:
+      display.print("MAT ");
+      display.print(gaugeData.MAT / 10);
+      break;
+    }
+
+    validity_window=millis();
+  }
+}
 
 void gauge_danger()
 {
@@ -1371,6 +1271,26 @@ void gauge_danger()
   display.setCursor(12,45);
   display.println("Manifold");
   display.display();
+}
+
+void print_menu(String items[], int numItems, int currPos)
+{
+  display.setTextSize(1);
+  for (int i = 0; i < numItems; i++)
+  {
+    if (currPos == i)
+    {
+      display.setTextColor(BLACK, WHITE);
+      display.setCursor(2, (10 * i) + 2);
+      display.print(items[i]);
+    }
+    else
+    {
+      display.setTextColor(WHITE);
+      display.setCursor(2, (10 * i) + 2);
+      display.print(items[i]);
+    }
+  }
 }
 
 void neogauge(int val, byte led, byte enable_warning)
