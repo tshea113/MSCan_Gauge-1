@@ -6,6 +6,7 @@
 #include <TimeLib.h>
 #include <FastLED.h>
 #include <Encoder.h>
+#include <EEPROM.h>
 
 #include "RotKnob.h"
 #include "MegasquirtMessages.h"
@@ -39,6 +40,7 @@ GaugeData gaugeData;
 
 // Menu vars
 MenuState menuState;
+Settings gaugeSettings;
 
 byte neo_brightness = 4;
 byte g_textsize = 1;
@@ -68,14 +70,15 @@ void setup(void)
   pinMode(TEENSY_LED, OUTPUT);
   digitalWrite(TEENSY_LED, 1);
 
+  // Load settings
+  gaugeSettings.neopixelEnable = EEPROM.read(NEOPIXEL_ENABLE_ADDR);
+
   Can0.begin(CAN_BAUD);
 
   // Set encoder pins as input with internal pull-up resistors enabled
   pinMode(RBUTTON_INT, INPUT);
   digitalWrite(RBUTTON_INT, HIGH);
   attachInterrupt(RBUTTON_INT, ISR_debounce, FALLING);
-
-  FastLED.show();
 
   // By default, we'll generate the high voltage from the 3.3v line internally! (neat!)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
@@ -88,22 +91,25 @@ void setup(void)
   FastLED.addLeds<NEOPIXEL, LEDPIN>(leds, NUM_LEDS);
   
   // Ring initialization animation
-  for(int i = 0; i < NUM_LEDS; i++)
-  {
-    leds[i].setRGB(16,16,16);
-    FastLED.show();
-    delay(20);
-  }
-  delay(200);
-  // TODO: Don't like this magic number, maybe have this tied to some brightness variable?
-  for (int j = 16; j > -1; j--) 
+  if (gaugeSettings.neopixelEnable)
   {
     for(int i = 0; i < NUM_LEDS; i++)
     {
-      leds[i].setRGB(j, j, j);
+      leds[i].setRGB(16,16,16);
+      FastLED.show();
+      delay(20);
     }
-    FastLED.show();
-    delay(20);
+    delay(200);
+    // TODO: Don't like this magic number, maybe have this tied to some brightness variable?
+    for (int j = 16; j > -1; j--) 
+    {
+      for(int i = 0; i < NUM_LEDS; i++)
+      {
+        leds[i].setRGB(j, j, j);
+      }
+      FastLED.show();
+      delay(20);
+    }
   }
 
   // Encoder has values from 0 to 65,535
@@ -377,16 +383,33 @@ void menu_check()
   {
     if (menuState.inSettings)
     {
-      if (menuState.settingsPos == NUM_SETTINGS-1)
+      // Exit is always the last item
+      if (menuState.settingsPos == NUM_SETTINGS - 1)
       {
         menuState.settingsPos = 0;
         menuState.menuPos = 0;
         menuState.inSettings = false;
+
+        if (gaugeSettings.dirty)
+        {
+          if (DEBUG_MODE)
+          {
+            Serial.println("Writing to EEPROM!");
+          }
+
+          EEPROM.write(NEOPIXEL_ENABLE_ADDR, gaugeSettings.neopixelEnable);
+          gaugeSettings.dirty = false;
+        }
+      }
+      else
+      {
+        menuState.settingSelect = !menuState.settingSelect;
       }
     }
     else
     {
-      if (menuState.menuPos == NUM_VIEWS-1)
+      // Settings is always the last item
+      if (menuState.menuPos == NUM_VIEWS - 1)
       {
         menuState.inSettings = true;
       }
@@ -438,13 +461,41 @@ void display_settings()
     encLastPos = encoderIndex;
     encoderIndex=myEnc.read();
 
-    if (encoderIndex > encLastPos && menuState.settingsPos < NUM_SETTINGS - 1)
+    if (menuState.settingSelect)
     {
-      menuState.settingsPos++;
+      if (encoderIndex > encLastPos)
+      {
+        switch(menuState.settingsPos)
+        {
+        case 0:
+          gaugeSettings.neopixelEnable = !gaugeSettings.neopixelEnable;
+          break;
+        }
+
+        gaugeSettings.dirty = true;
+      }
+      else if (encoderIndex < encLastPos)
+      {
+        switch(menuState.settingsPos)
+        {
+        case 0:
+          gaugeSettings.neopixelEnable = !gaugeSettings.neopixelEnable;
+          break;
+        }
+
+        gaugeSettings.dirty = true;
+      }      
     }
-    else if (encoderIndex < encLastPos && menuState.settingsPos > 0)
+    else
     {
-      menuState.settingsPos--;
+      if (encoderIndex > encLastPos && menuState.settingsPos < NUM_SETTINGS - 1)
+      {
+        menuState.settingsPos++;
+      }
+      else if (encoderIndex < encLastPos && menuState.settingsPos > 0)
+      {
+        menuState.settingsPos--;
+      }
     }
 
     if (DEBUG_MODE)
@@ -455,7 +506,47 @@ void display_settings()
   }
 
   display.clearDisplay();
-  print_menu(SETTINGS, NUM_SETTINGS, menuState.settingsPos);
+
+  display.setTextSize(1);
+  for (int i = 0; i < NUM_SETTINGS; i++)
+  {
+    if (menuState.settingsPos == i && !menuState.settingSelect)
+    {
+      display.setTextColor(BLACK, WHITE);
+      display.setCursor(2, (10 * i) + 2);
+      display.print(SETTINGS[i]);
+    }
+    else
+    {
+      display.setTextColor(WHITE);
+      display.setCursor(2, (10 * i) + 2);
+      display.print(SETTINGS[i]);
+    }
+
+    if (menuState.settingsPos == i && menuState.settingSelect)
+    {
+      display.setTextColor(BLACK, WHITE);
+      display.setCursor(64, (10 * i) + 2);
+      switch (i)
+      {
+      case 0:
+        display.print(gaugeSettings.neopixelEnable ? "On" : "Off"); 
+        break;
+      }     
+    }
+    else
+    {
+      display.setTextColor(WHITE);
+      display.setCursor(64, (10 * i) + 2);
+      switch (i)
+      {
+      case 0:
+        display.print(gaugeSettings.neopixelEnable ? "On" : "Off"); 
+        break;
+      }            
+    }
+  }
+
   display.display();
 }
 
