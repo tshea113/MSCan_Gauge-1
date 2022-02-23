@@ -1,23 +1,33 @@
 // Constants
 const int NUM_VIEWS                     = 4;      // Number of gauge views
-const int NUM_SETTINGS                  = 1;      // Number of settings
+const int NUM_SETTINGS                  = 2;      // Number of settings
 const int NUM_GAUGES                    = 16;     // Number of gauges
 const int NUM_GRAPHS                    = 3;      // Number of graph gauges
 
 const String VIEWS[NUM_VIEWS] = {"Dashboard", "Single", "Graph", "Settings"};
-const String SETTINGS[NUM_SETTINGS] = {"Exit"};
+const String SETTINGS[NUM_SETTINGS] = {"Neopixel", "Exit"};
 const String GAUGES[NUM_GAUGES] = {"RPM", "AFR", "Coolant", "MAP", "MAT", "Timing", "Voltage", "TPS", "Knock", "Barometer", "EGO Corr", "IAC", "Spark Dwell", "Boost Duty", "Idle Target", "AFR Target"};
 const String GRAPHS[NUM_GRAPHS] = {"AFR", "MAP", "MAT"};
+
+// EEPROM Addresses
+const uint8_t NEOPIXEL_ENABLE_ADDR  = 0;
 
 // Data Structures
 struct MenuState
 {
   bool inMenu = false;
   bool inSettings = false;
+  bool settingSelect = false;
   uint8_t menuPos = 0;
   uint8_t settingsPos = 0;
   uint8_t gaugeSinglePos = 0;
   uint8_t gaugeGraphPos = 0;
+};
+
+struct Settings
+{
+  bool dirty = false;
+  bool neopixelEnable = true;
 };
 
 struct GaugeData
