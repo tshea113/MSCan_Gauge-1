@@ -5,7 +5,7 @@ const int NUM_GAUGES                    = 16;     // Number of gauges
 const int NUM_GRAPHS                    = 3;      // Number of graph gauges
 
 const String VIEWS[NUM_VIEWS] = {"Dashboard", "Single", "Graph", "Settings"};
-const String SETTINGS[NUM_SETTINGS] = {"Neopixel", "Exit"};
+const String SETTINGS[NUM_SETTINGS] = {"LED Ring", "Exit"};
 const String GAUGES[NUM_GAUGES] = {"RPM", "AFR", "Coolant", "MAP", "MAT", "Timing", "Voltage", "TPS", "Knock", "Barometer", "EGO Corr", "IAC", "Spark Dwell", "Boost Duty", "Idle Target", "AFR Target"};
 const String GRAPHS[NUM_GRAPHS] = {"AFR", "MAP", "MAT"};
 
@@ -27,7 +27,7 @@ struct MenuState
 struct Settings
 {
   bool dirty = false;
-  bool neopixelEnable = true;
+  bool LEDRingEnable = true;
 };
 
 struct GaugeData
