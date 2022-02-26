@@ -202,7 +202,11 @@ void loop(void)
     }
     else
     {
-      if (!value_oob())
+      if (value_oob() && gaugeSettings.warningsEnable)
+      {
+        gauge_warning();
+      }
+      else
       {
         switch (menuState.menuPos)
         {
@@ -219,10 +223,6 @@ void loop(void)
           Serial.println("Invalid view!");
         }
       } 
-      else
-      {
-        gauge_warning();
-      }
     }
     display.display();
     displayTimer.reset();
