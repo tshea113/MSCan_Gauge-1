@@ -1,16 +1,20 @@
 // Constants
 const int NUM_VIEWS                     = 4;      // Number of gauge views
-const int NUM_SETTINGS                  = 2;      // Number of settings
+const int NUM_SETTINGS                  = 3;      // Number of settings
 const int NUM_GAUGES                    = 16;     // Number of gauges
 const int NUM_GRAPHS                    = 3;      // Number of graph gauges
 
 const String VIEWS[NUM_VIEWS] = {"Dashboard", "Single", "Graph", "Settings"};
-const String SETTINGS[NUM_SETTINGS] = {"LED Ring", "Exit"};
+const String SETTINGS[NUM_SETTINGS] = {"LED Ring", "Shift RPM", "Exit"};
 const String GAUGES[NUM_GAUGES] = {"RPM", "AFR", "Coolant", "MAP", "MAT", "Timing", "Voltage", "TPS", "Knock", "Barometer", "EGO Corr", "IAC", "Spark Dwell", "Boost Duty", "Idle Target", "AFR Target"};
 const String GRAPHS[NUM_GRAPHS] = {"AFR", "MAP", "MAT"};
 
 // EEPROM Addresses
-const uint8_t NEOPIXEL_ENABLE_ADDR  = 0;
+const uint8_t EEPROM_INIT       = 0;
+const uint8_t RING_ENABLE_ADDR  = 1;
+const uint8_t SHIFT_RPM_ADDR    = 2;
+
+const uint8_t EEPROM_VALID = 13;
 
 // Data Structures
 struct MenuState
@@ -28,6 +32,7 @@ struct Settings
 {
   bool dirty = false;
   bool LEDRingEnable = true;
+  uint16_t shiftRPM = 6800;
 };
 
 struct GaugeData

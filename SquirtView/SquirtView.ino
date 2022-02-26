@@ -19,8 +19,8 @@ CRGB leds[NUM_LEDS];
 
 // Encoder
 rotKnob<ENC_PIN_1, ENC_PIN_2> myEnc;
-uint16_t encoderIndex;
-uint16_t encLastPos;
+int16_t encoderIndex;
+int16_t encLastPos;
 bool buttonPressed;
 volatile unsigned long last_millis;   //switch debouncing
 
@@ -70,8 +70,25 @@ void setup(void)
   pinMode(TEENSY_LED, OUTPUT);
   digitalWrite(TEENSY_LED, 1);
 
-  // Load settings
-  gaugeSettings.neopixelEnable = EEPROM.read(NEOPIXEL_ENABLE_ADDR);
+  EEPROM.write(SHIFT_RPM_ADDR, gaugeSettings.shiftRPM);
+  EEPROM.write(SHIFT_RPM_ADDR + 1, gaugeSettings.shiftRPM >> 8);
+
+  // On first run of the gauge, the EEPROM will have garbage values. To fix this,
+  // we check for an identifier in the first address and write default values if it
+  // is not present.
+  if (EEPROM.read(EEPROM_INIT) == EEPROM_VALID)
+  {
+    gaugeSettings.LEDRingEnable = EEPROM.read(RING_ENABLE_ADDR);
+    gaugeSettings.shiftRPM = EEPROM.read((SHIFT_RPM_ADDR + 1)) << 8;
+    gaugeSettings.shiftRPM |= EEPROM.read(SHIFT_RPM_ADDR);
+  }
+  else
+  {
+    EEPROM.write(RING_ENABLE_ADDR, gaugeSettings.LEDRingEnable);
+    EEPROM.write(SHIFT_RPM_ADDR, gaugeSettings.shiftRPM);
+    EEPROM.write(SHIFT_RPM_ADDR + 1, gaugeSettings.shiftRPM >> 8);
+    EEPROM.write(EEPROM_INIT, EEPROM_VALID);
+  }
 
   Can0.begin(CAN_BAUD);
 
@@ -91,7 +108,7 @@ void setup(void)
   FastLED.addLeds<NEOPIXEL, LEDPIN>(leds, NUM_LEDS);
   
   // Ring initialization animation
-  if (gaugeSettings.neopixelEnable)
+  if (gaugeSettings.LEDRingEnable)
   {
     for(int i = 0; i < NUM_LEDS; i++)
     {
@@ -112,9 +129,7 @@ void setup(void)
     }
   }
 
-  // Encoder has values from 0 to 65,535
-  // This is probably reasonably large enough for basic use, but I can see this
-  // being an issue if the edge values are reached in normal use.
+  // Encoder has values from -32,768 to 32,767 starting at 0
   myEnc.begin();
   encLastPos = myEnc.read();
   buttonPressed = false;
@@ -397,7 +412,9 @@ void menu_check()
             Serial.println("Writing to EEPROM!");
           }
 
-          EEPROM.write(NEOPIXEL_ENABLE_ADDR, gaugeSettings.neopixelEnable);
+          EEPROM.write(RING_ENABLE_ADDR, gaugeSettings.LEDRingEnable);
+          EEPROM.write(SHIFT_RPM_ADDR, gaugeSettings.shiftRPM);
+          EEPROM.write(SHIFT_RPM_ADDR + 1, gaugeSettings.shiftRPM >> 8);
           gaugeSettings.dirty = false;
         }
       }
@@ -443,6 +460,10 @@ void display_menu()
 
     if (DEBUG_MODE)
     {
+      Serial.print("Encoder: ");
+      Serial.print(encoderIndex);
+      Serial.print(" Last: ");
+      Serial.println(encLastPos);
       Serial.print("Menu: ");
       Serial.println(menuState.menuPos);
     }
@@ -468,7 +489,10 @@ void display_settings()
         switch(menuState.settingsPos)
         {
         case 0:
-          gaugeSettings.neopixelEnable = !gaugeSettings.neopixelEnable;
+          gaugeSettings.LEDRingEnable = !gaugeSettings.LEDRingEnable;
+          break;
+        case 1:
+          if (gaugeSettings.shiftRPM - RPM_INTERVAL < MAX_RPM) gaugeSettings.shiftRPM += RPM_INTERVAL;
           break;
         }
 
@@ -479,7 +503,10 @@ void display_settings()
         switch(menuState.settingsPos)
         {
         case 0:
-          gaugeSettings.neopixelEnable = !gaugeSettings.neopixelEnable;
+          gaugeSettings.LEDRingEnable = !gaugeSettings.LEDRingEnable;
+          break;
+        case 1:
+          if (gaugeSettings.shiftRPM > RPM_INTERVAL) gaugeSettings.shiftRPM -= RPM_INTERVAL;
           break;
         }
 
@@ -500,6 +527,10 @@ void display_settings()
 
     if (DEBUG_MODE)
     {
+      Serial.print("Encoder: ");
+      Serial.print(encoderIndex);
+      Serial.print(" Last: ");
+      Serial.println(encLastPos);
       Serial.print("Settings: ");
       Serial.println(menuState.settingsPos);
     }
@@ -530,7 +561,10 @@ void display_settings()
       switch (i)
       {
       case 0:
-        display.print(gaugeSettings.neopixelEnable ? "On" : "Off"); 
+        display.print(gaugeSettings.LEDRingEnable ? "On" : "Off"); 
+        break;
+      case 1:
+        display.print(gaugeSettings.shiftRPM);
         break;
       }     
     }
@@ -541,7 +575,10 @@ void display_settings()
       switch (i)
       {
       case 0:
-        display.print(gaugeSettings.neopixelEnable ? "On" : "Off"); 
+        display.print(gaugeSettings.LEDRingEnable ? "On" : "Off");
+        break;
+      case 1:
+        display.print(gaugeSettings.shiftRPM);
         break;
       }            
     }
@@ -555,7 +592,7 @@ void gauge_warning()
   byte dlength, llength;
   int midpos;
 
-  display.clearDisplay();;
+  display.clearDisplay();
 
   if (gaugeData.RPM > 6800)
   {
@@ -970,6 +1007,10 @@ void gauge_single()
     }
     if (DEBUG_MODE)
     {
+      Serial.print("Encoder: ");
+      Serial.print(encoderIndex);
+      Serial.print(" Last: ");
+      Serial.println(encLastPos);
       Serial.print("Single: ");
       Serial.println(menuState.gaugeSinglePos);
     }
@@ -1254,6 +1295,10 @@ void gauge_graph()
 
     if (DEBUG_MODE)
     {
+      Serial.print("Encoder: ");
+      Serial.print(encoderIndex);
+      Serial.print(" Last: ");
+      Serial.println(encLastPos);
       Serial.print("Graph: ");
       Serial.println(menuState.gaugeGraphPos);
     }
@@ -1347,7 +1392,7 @@ void gauge_danger()
 {
   display.setTextSize(2);
   display.setTextColor(WHITE);
-  display.clearDisplay();;
+  display.clearDisplay();
   display.setCursor(0,0);
 
   display.setCursor(4,0);

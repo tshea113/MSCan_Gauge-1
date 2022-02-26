@@ -7,5 +7,8 @@
 #define OLED_RESET  20  // OLED Reset
 
 // TODO: These might be deleted when moving to SPI
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define SCREEN_WIDTH    128 // OLED display width, in pixels
+#define SCREEN_HEIGHT   64 // OLED display height, in pixels
+
+#define MAX_RPM         20000   // Maximum RPM for shift light setting
+#define RPM_INTERVAL    100     // Smallest interval for shift light setting
