@@ -1,6 +1,6 @@
 /* Compact and quick encoder class for these horribly bouncing
  * cheap rotary knobs with 4 transitions per click.
- * Default range is from 0 to 65,535 starting at 0.
+ * Default range is from -32,768 to 32,767 starting at 0.
  *
  * Might be initialized with begin(startVal); to start at
  * a predefined number.
@@ -15,7 +15,7 @@ template<uint8_t pinA, uint8_t pinB>
 class rotKnob
 {
 public:
-	void begin(uint16_t startVal, uint16_t lowBound, uint16_t hiBound)
+	void begin(int16_t startVal, int16_t lowBound, int16_t hiBound)
 	{
 		d._sValue = startVal;
 		d._lBound = lowBound;
@@ -30,25 +30,25 @@ public:
 		attachInterrupt(pinA, intPinA, CHANGE);
 		attachInterrupt(pinB, intPinB, CHANGE);
 	}
-	void begin(uint16_t startVal)
+	void begin(int16_t startVal)
 	{
-		begin(startVal, -128, 127);
+		begin(startVal, -32768, 32767);
 	}
 	void begin()
 	{
-		begin(0, 0, 65535);
+		begin(0, -32768, 32767);
 	}
 	void end()
 	{
 		detachInterrupt(pinA);
 		detachInterrupt(pinB);
 	}
-	uint16_t read()
+	int16_t read()
 	{
 		d._avail = false;
 		return d._sValue;
 	}
-	void write(uint16_t newVal)
+	void write(int16_t newVal)
 	{
 		d._sValue = newVal;
 		return;
@@ -61,7 +61,7 @@ private:
 	struct objData
 	{
 		volatile uint32_t* _aConf, *_bConf;
-		volatile uint16_t _lBound, _hBound, _sValue;
+		volatile int16_t _lBound, _hBound, _sValue;
 		volatile bool _aVal, _bVal, _avail;
 	};
 	static objData d;

@@ -19,8 +19,8 @@ CRGB leds[NUM_LEDS];
 
 // Encoder
 rotKnob<ENC_PIN_1, ENC_PIN_2> myEnc;
-uint16_t encoderIndex;
-uint16_t encLastPos;
+int16_t encoderIndex;
+int16_t encLastPos;
 bool buttonPressed;
 volatile unsigned long last_millis;   //switch debouncing
 
@@ -42,16 +42,9 @@ GaugeData gaugeData;
 MenuState menuState;
 Settings gaugeSettings;
 
-byte neo_brightness = 4;
+byte neo_brightness = 1;
 byte g_textsize = 1;
 char tempchars[11];
-
-// -------------------------------------------------------------
-static void ledBlink()
-{
-  ledTimer.reset();
-  digitalWrite(TEENSY_LED, 1);
-}
 
 static CAN_message_t txmsg,rxmsg;
 
@@ -65,13 +58,40 @@ byte histogram[64]; // 512 memory usage
 byte histogram_index;
 
 // -------------------------------------------------------------
+static void ledBlink()
+{
+  ledTimer.reset();
+  digitalWrite(TEENSY_LED, 1);
+}
+
+// -------------------------------------------------------------
 void setup(void)
 {
   pinMode(TEENSY_LED, OUTPUT);
   digitalWrite(TEENSY_LED, 1);
 
-  // Load settings
-  gaugeSettings.neopixelEnable = EEPROM.read(NEOPIXEL_ENABLE_ADDR);
+  // On first run of the gauge, the EEPROM will have garbage values. To fix this,
+  // we check for an identifier in the first address and write default values if it
+  // is not present.
+  if (EEPROM.read(EEPROM_INIT) == EEPROM_VALID)
+  {
+    gaugeSettings.LEDRingEnable = EEPROM.read(RING_ENABLE_ADDR);
+    gaugeSettings.shiftRPM = EEPROM.read((SHIFT_RPM_ADDR + 1)) << 8;
+    gaugeSettings.shiftRPM |= EEPROM.read(SHIFT_RPM_ADDR);
+    gaugeSettings.warningsEnable = EEPROM.read(WARN_ENABLE_ADDR);
+    gaugeSettings.coolantWarning = EEPROM.read((CLT_WARN_ADDR + 1)) << 8;
+    gaugeSettings.coolantWarning |= EEPROM.read(CLT_WARN_ADDR);
+  }
+  else
+  {
+    EEPROM.write(RING_ENABLE_ADDR, gaugeSettings.LEDRingEnable);
+    EEPROM.write(SHIFT_RPM_ADDR, gaugeSettings.shiftRPM);
+    EEPROM.write(SHIFT_RPM_ADDR + 1, gaugeSettings.shiftRPM >> 8);
+    EEPROM.write(WARN_ENABLE_ADDR, gaugeSettings.warningsEnable);
+    EEPROM.write(CLT_WARN_ADDR, gaugeSettings.coolantWarning);
+    EEPROM.write(CLT_WARN_ADDR + 1, gaugeSettings.coolantWarning >> 8);
+    EEPROM.write(EEPROM_INIT, EEPROM_VALID);
+  }
 
   Can0.begin(CAN_BAUD);
 
@@ -91,7 +111,7 @@ void setup(void)
   FastLED.addLeds<NEOPIXEL, LEDPIN>(leds, NUM_LEDS);
   
   // Ring initialization animation
-  if (gaugeSettings.neopixelEnable)
+  if (gaugeSettings.LEDRingEnable)
   {
     for(int i = 0; i < NUM_LEDS; i++)
     {
@@ -112,15 +132,16 @@ void setup(void)
     }
   }
 
-  // Encoder has values from 0 to 65,535
-  // This is probably reasonably large enough for basic use, but I can see this
-  // being an issue if the edge values are reached in normal use.
+  // Encoder has values from -32,768 to 32,767 starting at 0
   myEnc.begin();
   encLastPos = myEnc.read();
   buttonPressed = false;
 
   delay(1000);
   digitalWrite(TEENSY_LED, 0);
+
+  // TODO: DEBUG
+  gaugeData.RPM = 6700;
 }
 
 // -------------------------------------------------------------
@@ -133,7 +154,7 @@ void loop(void)
   }
   if (gaugeBlinkTimer.check())
   {
-    gaugeBlink = gaugeBlink ^ 1;
+    gaugeBlink = !gaugeBlink;
     gaugeBlinkTimer.reset();
   }
 
@@ -148,7 +169,7 @@ void loop(void)
     display.setCursor(0,0);
     display.display();
 
-    for(int i = 0; i < 16; i++)
+    for(int i = 0; i < NUM_LEDS; i++)
     {
       leds[i].setRGB(0, 0, 0); // initialize led ring
     }
@@ -162,20 +183,30 @@ void loop(void)
   {
     menu_check();
 
-    if (menuState.inMenu)
+    if (gaugeSettings.LEDRingEnable)
     {
-      if (menuState.inSettings)
-      {
-        display_settings();
-      }
-      else
-      {
-        display_menu();
-      }
+      shift_light();
     }
     else
     {
-      if (!value_oob())
+      for(int i = 0; i < NUM_LEDS; i++)
+      {
+        leds[i].setRGB(0, 0, 0);
+      }
+      FastLED.show();
+    }
+
+    if (menuState.inMenu)
+    {
+      menuState.inSettings ? display_settings() : display_menu();
+    }
+    else
+    {
+      if (value_oob() && gaugeSettings.warningsEnable)
+      {
+        gauge_warning();
+      }
+      else
       {
         switch (menuState.menuPos)
         {
@@ -191,13 +222,7 @@ void loop(void)
         default:
           Serial.println("Invalid view!");
         }
-        write_neopixel();
       } 
-      else
-      {
-        gauge_warning();
-        FastLED.show();
-      }
     }
     display.display();
     displayTimer.reset();
@@ -210,133 +235,8 @@ void loop(void)
     connectionState = true;
     ledBlink();
 
-    // ID's 1520+ are Megasquirt CAN broadcast frames
-    switch (rxmsg.id)
-    {
-      case 1520: // 0
-        gaugeData.RPM = (int)(word(rxmsg.buf[6], rxmsg.buf[7]));
-        break;
-      case 1521: // 1
-        gaugeData.SPKADV = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
-        gaugeData.engine = rxmsg.buf[3];
-        gaugeData.AFR_tar = (int)(word(0x00, rxmsg.buf[4]));
-        break;
-      case 1522: // 2
-        gaugeData.Baro = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
-        gaugeData.MAP = (int)(word(rxmsg.buf[2], rxmsg.buf[3]));
-        gaugeData.MAT = (int)(word(rxmsg.buf[4], rxmsg.buf[5]));
-        gaugeData.CLT = (int)(word(rxmsg.buf[6], rxmsg.buf[7]));
-        break;
-      case 1523: // 3
-        gaugeData.TPS = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
-        gaugeData.BATTV = (int)(word(rxmsg.buf[2], rxmsg.buf[3]));
-        break;
-      case 1524: // 4
-        gaugeData.Knock = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
-        gaugeData.EGOc = (int)(word(rxmsg.buf[2], rxmsg.buf[3]));
-        break;
-      case 1526: // 6
-        gaugeData.IAC = (int)(word(rxmsg.buf[6], rxmsg.buf[7])); //IAC = (IAC * 49) / 125;
-      case 1529: // 9
-        gaugeData.dwell = (int)(word(rxmsg.buf[4], rxmsg.buf[5]));
-        break;
-      case 1530: // 10
-        gaugeData.status1 = rxmsg.buf[0];
-        gaugeData.status2 = rxmsg.buf[1];
-        gaugeData.status3 = rxmsg.buf[2];
-        gaugeData.status6 = rxmsg.buf[6];
-        gaugeData.status7 = rxmsg.buf[7];
-        break;
-      case 1537: // 17
-        gaugeData.bstduty = (int)(word(rxmsg.buf[4], rxmsg.buf[5]));
-        break;
-      case 1548: // 28
-        gaugeData.idle_tar = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
-        break;
-      case 1551: // 31
-        gaugeData.AFR = (int)(word(0x00, rxmsg.buf[0]));
-        break;
-      case 1574: // 54
-        gaugeData.CEL = rxmsg.buf[2];
-        break;
-      default: 
-        // not a broadcast packet
-        // assume this is a normal Megasquirt CAN protocol packet and decode the header
-        if (rxmsg.ext)
-        {
-          rxmsg_id.i = rxmsg.id;
-          // is this being sent to us?
-          if (rxmsg_id.values.to_id == myCANid)
-          {
-            switch (rxmsg_id.values.msg_type)
-            {
-            case 1: // MSG_REQ - request data
-              // the data required for the MSG_RSP header is packed into the first 3 data bytes
-              msg_req_data.bytes.b0 = rxmsg.buf[0];
-              msg_req_data.bytes.b1 = rxmsg.buf[1];
-              msg_req_data.bytes.b2 = rxmsg.buf[2];
-              // Create the tx packet header
-              txmsg_id.values.msg_type = 2; // MSG_RSP
-              txmsg_id.values.to_id = msCANid; // Megasquirt CAN ID should normally be 0
-              txmsg_id.values.from_id = myCANid;
-              txmsg_id.values.block = msg_req_data.values.varblk;
-              txmsg_id.values.offset = msg_req_data.values.varoffset;
-              txmsg.ext = 1;
-              txmsg.id = txmsg_id.i;
-              txmsg.len = 8;
-              // Use the same block and offset as JBPerf IO expander board for compatibility reasons
-              // Docs at http://www.jbperf.com/io_extender/firmware/0_1_2/io_extender.ini (or latest version)
-
-              // realtime clock
-              if (rxmsg_id.values.block == 7 && rxmsg_id.values.offset == 110)
-              {
-                /*
-                  rtc_sec          = scalar, U08,  110, "", 1,0
-                  rtc_min          = scalar, U08,  111, "", 1,0
-                  rtc_hour         = scalar, U08,  112, "", 1,0
-                  rtc_day          = scalar, U08,  113, "", 1,0 // not sure what "day" means. seems to be ignored...
-                  rtc_date         = scalar, U08,  114, "", 1,0
-                  rtc_month        = scalar, U08,  115, "", 1,0
-                  rtc_year         = scalar, U16,  116, "", 1,0
-                */
-
-                // only return clock info if the local clock has actually been set (via GPS or RTC)
-                if (timeStatus() == timeSet)
-                {
-                  txmsg.buf[0] = second();
-                  txmsg.buf[1] = minute();
-                  txmsg.buf[2] = hour();
-                  txmsg.buf[3] = 0;
-                  txmsg.buf[4] = day();
-                  txmsg.buf[5] = month();
-                  txmsg.buf[6] = year() / 256;
-                  txmsg.buf[7] = year() % 256;
-                  // send the message!
-                  Can0.write(txmsg);
-                }
-              } 
-            }
-          }
-        }
-        else
-        {
-          Serial.write("ID: ");
-          Serial.print(rxmsg.id);
-        }
-    }
+    read_CAN_message();
   }
-}
-
-void divby10(int val)
-{
-  byte length;
-
-  itoa(val, tempchars, 10);
-  length=strlen(tempchars);
-
-  tempchars[length + 1]=tempchars[length]; // null shift right
-  tempchars[length]=tempchars[length - 1];
-  tempchars[length - 1]='.';
 }
 
 // interrupt handler for the encoder button
@@ -357,23 +257,148 @@ void ISR_debounce ()
   last_millis = millis();
 }
 
+void divby10(int val)
+{
+  byte length;
+
+  itoa(val, tempchars, 10);
+  length=strlen(tempchars);
+
+  tempchars[length + 1]=tempchars[length]; // null shift right
+  tempchars[length]=tempchars[length - 1];
+  tempchars[length - 1]='.';
+}
+
+void read_CAN_message()
+{
+  // ID's 1520+ are Megasquirt CAN broadcast frames
+  switch (rxmsg.id)
+  {
+  case 1520: // 0
+    gaugeData.RPM = (int)(word(rxmsg.buf[6], rxmsg.buf[7]));
+    break;
+  case 1521: // 1
+    gaugeData.SPKADV = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+    gaugeData.engine = rxmsg.buf[3];
+    gaugeData.AFR_tar = (int)(word(0x00, rxmsg.buf[4]));
+    break;
+  case 1522: // 2
+    gaugeData.Baro = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+    gaugeData.MAP = (int)(word(rxmsg.buf[2], rxmsg.buf[3]));
+    gaugeData.MAT = (int)(word(rxmsg.buf[4], rxmsg.buf[5]));
+    gaugeData.CLT = (int)(word(rxmsg.buf[6], rxmsg.buf[7]));
+    break;
+  case 1523: // 3
+    gaugeData.TPS = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+    gaugeData.BATTV = (int)(word(rxmsg.buf[2], rxmsg.buf[3]));
+    break;
+  case 1524: // 4
+    gaugeData.Knock = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+    gaugeData.EGOc = (int)(word(rxmsg.buf[2], rxmsg.buf[3]));
+    break;
+  case 1526: // 6
+    gaugeData.IAC = (int)(word(rxmsg.buf[6], rxmsg.buf[7])); //IAC = (IAC * 49) / 125;
+  case 1529: // 9
+    gaugeData.dwell = (int)(word(rxmsg.buf[4], rxmsg.buf[5]));
+    break;
+  case 1530: // 10
+    gaugeData.status1 = rxmsg.buf[0];
+    gaugeData.status2 = rxmsg.buf[1];
+    gaugeData.status3 = rxmsg.buf[2];
+    gaugeData.status6 = rxmsg.buf[6];
+    gaugeData.status7 = rxmsg.buf[7];
+    break;
+  case 1537: // 17
+    gaugeData.bstduty = (int)(word(rxmsg.buf[4], rxmsg.buf[5]));
+    break;
+  case 1548: // 28
+    gaugeData.idle_tar = (int)(word(rxmsg.buf[0], rxmsg.buf[1]));
+    break;
+  case 1551: // 31
+    gaugeData.AFR = (int)(word(0x00, rxmsg.buf[0]));
+    break;
+  case 1574: // 54
+    gaugeData.CEL = rxmsg.buf[2];
+    break;
+  default: 
+    // not a broadcast packet
+    // assume this is a normal Megasquirt CAN protocol packet and decode the header
+    if (rxmsg.ext)
+    {
+      rxmsg_id.i = rxmsg.id;
+      // is this being sent to us?
+      if (rxmsg_id.values.to_id == myCANid)
+      {
+        switch (rxmsg_id.values.msg_type)
+        {
+        case 1: // MSG_REQ - request data
+          // the data required for the MSG_RSP header is packed into the first 3 data bytes
+          msg_req_data.bytes.b0 = rxmsg.buf[0];
+          msg_req_data.bytes.b1 = rxmsg.buf[1];
+          msg_req_data.bytes.b2 = rxmsg.buf[2];
+          // Create the tx packet header
+          txmsg_id.values.msg_type = 2; // MSG_RSP
+          txmsg_id.values.to_id = msCANid; // Megasquirt CAN ID should normally be 0
+          txmsg_id.values.from_id = myCANid;
+          txmsg_id.values.block = msg_req_data.values.varblk;
+          txmsg_id.values.offset = msg_req_data.values.varoffset;
+          txmsg.ext = 1;
+          txmsg.id = txmsg_id.i;
+          txmsg.len = 8;
+          // Use the same block and offset as JBPerf IO expander board for compatibility reasons
+          // Docs at http://www.jbperf.com/io_extender/firmware/0_1_2/io_extender.ini (or latest version)
+
+          // realtime clock
+          if (rxmsg_id.values.block == 7 && rxmsg_id.values.offset == 110)
+          {
+            /*
+              rtc_sec          = scalar, U08,  110, "", 1,0
+              rtc_min          = scalar, U08,  111, "", 1,0
+              rtc_hour         = scalar, U08,  112, "", 1,0
+              rtc_day          = scalar, U08,  113, "", 1,0 // not sure what "day" means. seems to be ignored...
+              rtc_date         = scalar, U08,  114, "", 1,0
+              rtc_month        = scalar, U08,  115, "", 1,0
+              rtc_year         = scalar, U16,  116, "", 1,0
+            */
+
+            // only return clock info if the local clock has actually been set (via GPS or RTC)
+            if (timeStatus() == timeSet)
+            {
+              txmsg.buf[0] = second();
+              txmsg.buf[1] = minute();
+              txmsg.buf[2] = hour();
+              txmsg.buf[3] = 0;
+              txmsg.buf[4] = day();
+              txmsg.buf[5] = month();
+              txmsg.buf[6] = year() / 256;
+              txmsg.buf[7] = year() % 256;
+              // send the message!
+              Can0.write(txmsg);
+            }
+          } 
+        }
+      }
+    }
+    else
+    {
+      Serial.write("ID: ");
+      Serial.print(rxmsg.id);
+    }
+  }
+}
+
 boolean value_oob()
 {
   if (gaugeData.RPM > 100)
   {
-    if ((gaugeData.CLT/10) > 260) return 1;
-    if (gaugeData.CEL != 0) return 1;
+    if ((gaugeData.CLT/10) > gaugeSettings.coolantWarning) return 1;
+    // if (gaugeData.CEL != 0) return 1;
+    if (bitRead(gaugeData.status2,6)) return 1; // overboost
   } 
   else
   {
     return false;
   }
-
-  if ( bitRead(gaugeData.status2,6) == 1)
-  {
-    return true; // overboost
-  }
-  return false;
 }
 
 void menu_check()
@@ -397,7 +422,12 @@ void menu_check()
             Serial.println("Writing to EEPROM!");
           }
 
-          EEPROM.write(NEOPIXEL_ENABLE_ADDR, gaugeSettings.neopixelEnable);
+          EEPROM.write(RING_ENABLE_ADDR, gaugeSettings.LEDRingEnable);
+          EEPROM.write(SHIFT_RPM_ADDR, gaugeSettings.shiftRPM);
+          EEPROM.write(SHIFT_RPM_ADDR + 1, gaugeSettings.shiftRPM >> 8);
+          EEPROM.write(WARN_ENABLE_ADDR, gaugeSettings.warningsEnable);
+          EEPROM.write(CLT_WARN_ADDR, gaugeSettings.coolantWarning);
+          EEPROM.write(CLT_WARN_ADDR + 1, gaugeSettings.coolantWarning >> 8);
           gaugeSettings.dirty = false;
         }
       }
@@ -443,6 +473,10 @@ void display_menu()
 
     if (DEBUG_MODE)
     {
+      Serial.print("Encoder: ");
+      Serial.print(encoderIndex);
+      Serial.print(" Last: ");
+      Serial.println(encLastPos);
       Serial.print("Menu: ");
       Serial.println(menuState.menuPos);
     }
@@ -468,7 +502,16 @@ void display_settings()
         switch(menuState.settingsPos)
         {
         case 0:
-          gaugeSettings.neopixelEnable = !gaugeSettings.neopixelEnable;
+          gaugeSettings.LEDRingEnable = !gaugeSettings.LEDRingEnable;
+          break;
+        case 1:
+          if (gaugeSettings.shiftRPM - RPM_INTERVAL < MAX_RPM) gaugeSettings.shiftRPM += RPM_INTERVAL;
+          break;
+        case 2:
+          gaugeSettings.warningsEnable = !gaugeSettings.warningsEnable;
+          break;
+        case 3:
+          if (gaugeSettings.coolantWarning < MAX_CLT) gaugeSettings.coolantWarning++;
           break;
         }
 
@@ -479,7 +522,16 @@ void display_settings()
         switch(menuState.settingsPos)
         {
         case 0:
-          gaugeSettings.neopixelEnable = !gaugeSettings.neopixelEnable;
+          gaugeSettings.LEDRingEnable = !gaugeSettings.LEDRingEnable;
+          break;
+        case 1:
+          if (gaugeSettings.shiftRPM + RPM_INTERVAL > MIN_RPM) gaugeSettings.shiftRPM -= RPM_INTERVAL;
+          break;
+        case 2:
+          gaugeSettings.warningsEnable = !gaugeSettings.warningsEnable;
+          break;
+        case 3:
+          if (gaugeSettings.coolantWarning > 0) gaugeSettings.coolantWarning--;
           break;
         }
 
@@ -500,6 +552,10 @@ void display_settings()
 
     if (DEBUG_MODE)
     {
+      Serial.print("Encoder: ");
+      Serial.print(encoderIndex);
+      Serial.print(" Last: ");
+      Serial.println(encLastPos);
       Serial.print("Settings: ");
       Serial.println(menuState.settingsPos);
     }
@@ -513,37 +569,39 @@ void display_settings()
     if (menuState.settingsPos == i && !menuState.settingSelect)
     {
       display.setTextColor(BLACK, WHITE);
-      display.setCursor(2, (10 * i) + 2);
-      display.print(SETTINGS[i]);
     }
     else
     {
       display.setTextColor(WHITE);
-      display.setCursor(2, (10 * i) + 2);
-      display.print(SETTINGS[i]);
     }
+
+    display.setCursor(2, (10 * i) + 2);
+    display.print(SETTINGS[i]);
 
     if (menuState.settingsPos == i && menuState.settingSelect)
     {
-      display.setTextColor(BLACK, WHITE);
-      display.setCursor(64, (10 * i) + 2);
-      switch (i)
-      {
-      case 0:
-        display.print(gaugeSettings.neopixelEnable ? "On" : "Off"); 
-        break;
-      }     
+      display.setTextColor(BLACK, WHITE);   
     }
     else
     {
-      display.setTextColor(WHITE);
-      display.setCursor(64, (10 * i) + 2);
-      switch (i)
-      {
-      case 0:
-        display.print(gaugeSettings.neopixelEnable ? "On" : "Off"); 
-        break;
-      }            
+      display.setTextColor(WHITE);       
+    }
+
+    display.setCursor(100, (10 * i) + 2);
+    switch (i)
+    {
+    case 0:
+      display.print(gaugeSettings.LEDRingEnable ? "On" : "Off");
+      break;
+    case 1:
+      display.print(gaugeSettings.shiftRPM);
+      break;
+    case 2:
+      display.print(gaugeSettings.warningsEnable ? "On" : "Off"); 
+      break;
+    case 3:
+      display.print(gaugeSettings.coolantWarning);
+      break;
     }
   }
 
@@ -555,206 +613,138 @@ void gauge_warning()
   byte dlength, llength;
   int midpos;
 
-  display.clearDisplay();;
+  display.clearDisplay();
 
-  if (gaugeData.RPM > 6800)
+  if ((gaugeData.CLT/10) > gaugeSettings.coolantWarning)
   {
-    dlength=4;
-    llength=3;
-    midpos=(63 - ((dlength * 23) / 2));
     display.setTextColor(WHITE);
-    display.setCursor(midpos,0);
+    display.setTextSize(2);
+    display.setCursor(0, 0);
+    display.print("WARNING");
+
+    dlength = 3;
+    midpos = (63 - ((dlength * 23) / 2));
+    display.setCursor(midpos, 16);
     display.setTextSize(4);
-    display.print(gaugeData.RPM);
+    display.print(gaugeData.CLT / 10);
 
     display.setTextSize(2);
-    display.setCursor(8, (63 - 15));
-    display.print("RPM");
-
-    for (byte i = 0; i < 16; i++)
-    {
-      leds[i].setRGB(0, 0, 0);
-    } // zero out
-
-    byte i = ((gaugeData.RPM - 6800) / 50);
-
-    for (byte p=0; p < i; p++)
-    {
-      if (i <= 2)
-      {
-        leds[p+14].setRGB(((255 * neo_brightness) / 16), 0, 0);
-      }
-      else
-      {
-        leds[14].setRGB(((255 * neo_brightness) / 16), 0, 0);
-        leds[15].setRGB(((255 * neo_brightness) / 16), 0, 0);
-        leds[p-2].setRGB(((255 * neo_brightness) / 16), 0, 0);
-      }
-    }
-  }
-
-  if ((gaugeData.CLT/10) > 260)
-  {
-    dlength=3;
-    llength=3;
-    midpos=(63 - ((dlength * 23) / 2));
-    display.setTextColor(WHITE);
-    display.setCursor(midpos,0);
-    display.setTextSize(4);
-    display.print(gaugeData.CLT/10);
-
-    display.setTextSize(2);
-    display.setCursor(8, (63 - 15));
+    display.setCursor(0, 48);
     display.print("CLT");
-    for (byte i=0; i < 16; i++)
-    {
-      neogauge(999, i, 0);
-    }
   }
 
-  if (bitRead(gaugeData.CEL, 0))
-  {
-    display.setTextColor(WHITE);
-    dlength=3;
-    midpos=(63 - ((dlength * 23) / 2));
-    display.setCursor(29, 0);
-    display.setTextSize(4);
-    display.print("MAP");
-    display.setTextSize(2);
-    display.setCursor(8, 48);
-    display.print("Error");
-    for (byte i=0; i < 16; i++)
-    {
-      neogauge(999, i, 0);
-    }
-  }
+  display.display();
 
-  if (bitRead(gaugeData.CEL, 1))
-  {
-    display.setTextColor(WHITE);
-    dlength=3;
-    midpos=(63 - ((dlength * 23) / 2));
-    display.setCursor(29, 0);
-    display.setTextSize(4);
-    display.print("MAT");
-    display.setTextSize(2);
-    display.setCursor(8, 48);
-    display.print("Error");
-    for (byte i=0; i < 16; i++)
-    {
-      neogauge(999, i, 0);
-    }
+  // if (bitRead(gaugeData.CEL, 0))
+  // {
+  //   display.setTextColor(WHITE);
+  //   dlength=3;
+  //   midpos=(63 - ((dlength * 23) / 2));
+  //   display.setCursor(29, 0);
+  //   display.setTextSize(4);
+  //   display.print("MAP");
+  //   display.setTextSize(2);
+  //   display.setCursor(8, 48);
+  //   display.print("Error");
+  // }
 
-  }
+  // if (bitRead(gaugeData.CEL, 1))
+  // {
+  //   display.setTextColor(WHITE);
+  //   dlength=3;
+  //   midpos=(63 - ((dlength * 23) / 2));
+  //   display.setCursor(29, 0);
+  //   display.setTextSize(4);
+  //   display.print("MAT");
+  //   display.setTextSize(2);
+  //   display.setCursor(8, 48);
+  //   display.print("Error");
 
-  if (bitRead(gaugeData.CEL, 2))
-  {
-    display.setTextColor(WHITE);
-    dlength=3;
-    midpos=(63 - ((dlength * 23) / 2));
-    display.setCursor(29, 0);
-    display.setTextSize(4);
-    display.print("CLT");
-    display.setTextSize(2);
-    display.setCursor(8, 48);
-    display.print("Error");
-    for (byte i=0; i < 16; i++)
-    {
-      neogauge(999, i, 0);
-    }
-  }
+  // }
 
-  if (bitRead(gaugeData.CEL, 3))
-  {
-    display.setTextColor(WHITE);
-    dlength=3;
-    midpos=(63 - ((dlength * 23) / 2));
-    display.setCursor(29, 0);
-    display.setTextSize(4);
-    display.print("TPS");
-    display.setTextSize(2);
-    display.setCursor(8, 48);
-    display.print("Error");
-    for (byte i=0; i < 16; i++)
-    {
-      neogauge(999, i, 0);
-    }
+  // if (bitRead(gaugeData.CEL, 2))
+  // {
+  //   display.setTextColor(WHITE);
+  //   dlength=3;
+  //   midpos=(63 - ((dlength * 23) / 2));
+  //   display.setCursor(29, 0);
+  //   display.setTextSize(4);
+  //   display.print("CLT");
+  //   display.setTextSize(2);
+  //   display.setCursor(8, 48);
+  //   display.print("Error");
+  // }
 
-  }
+  // if (bitRead(gaugeData.CEL, 3))
+  // {
+  //   display.setTextColor(WHITE);
+  //   dlength=3;
+  //   midpos=(63 - ((dlength * 23) / 2));
+  //   display.setCursor(29, 0);
+  //   display.setTextSize(4);
+  //   display.print("TPS");
+  //   display.setTextSize(2);
+  //   display.setCursor(8, 48);
+  //   display.print("Error");
 
-  if (bitRead(gaugeData.CEL, 4))
-  {
-    display.setTextColor(WHITE);
-    dlength=3;
-    midpos=(63 - ((dlength * 23) / 2));
-    display.setCursor(29, 0);
-    display.setTextSize(4);
-    display.print("BATT");
-    display.setTextSize(2);
-    display.setCursor(8, 48);
-    display.print("Error");
-    for (byte i=0; i < 16; i++)
-    {
-      neogauge(999, i, 0);
-    }
-  }
+  // }
 
-  if (bitRead(gaugeData.CEL, 5))
-  {
-    display.setTextColor(WHITE);
-    dlength=3;
-    midpos=(63 - ((dlength * 23) / 2));
-    display.setCursor(29, 0);
-    display.setTextSize(4);
-    display.print("AFR");
-    display.setTextSize(2);
-    display.setCursor(8, 48);
-    display.print("Error");
-    for (byte i=0; i < 16; i++)
-    {
-      neogauge(999, i, 0);
-    }
-  }
+  // if (bitRead(gaugeData.CEL, 4))
+  // {
+  //   display.setTextColor(WHITE);
+  //   dlength=3;
+  //   midpos=(63 - ((dlength * 23) / 2));
+  //   display.setCursor(29, 0);
+  //   display.setTextSize(4);
+  //   display.print("BATT");
+  //   display.setTextSize(2);
+  //   display.setCursor(8, 48);
+  //   display.print("Error");
+  // }
 
-  if (bitRead(gaugeData.CEL, 6))
-  {
-    display.setTextColor(WHITE);
-    dlength=3;
-    midpos=(63 - ((dlength * 23) / 2));
-    display.setCursor(29, 0);
-    display.setTextSize(4);
-    display.print("Sync");
-    display.setTextSize(2);
-    display.setCursor(8, 48);
-    display.print("Error");
-    for (byte i=0; i < 16; i++)
-    {
-      neogauge(999, i, 0);
-    }
-  }
+  // if (bitRead(gaugeData.CEL, 5))
+  // {
+  //   display.setTextColor(WHITE);
+  //   dlength=3;
+  //   midpos=(63 - ((dlength * 23) / 2));
+  //   display.setCursor(29, 0);
+  //   display.setTextSize(4);
+  //   display.print("AFR");
+  //   display.setTextSize(2);
+  //   display.setCursor(8, 48);
+  //   display.print("Error");
+  // }
 
-  if (bitRead(gaugeData.CEL, 7))
-  {
-    display.setTextColor(WHITE);
-    dlength=3;
-    midpos=(63 - ((dlength * 23) / 2));
-    display.setCursor(29, 0);
-    display.setTextSize(4);
-    display.print("EGT");
-    display.setTextSize(2);
-    display.setCursor(8, 48);
-    display.print("Error");
-    for (byte i=0; i < 16; i++)
-    {
-      neogauge(999, i, 0);
-    }
-  }
+  // if (bitRead(gaugeData.CEL, 6))
+  // {
+  //   display.setTextColor(WHITE);
+  //   dlength=3;
+  //   midpos=(63 - ((dlength * 23) / 2));
+  //   display.setCursor(29, 0);
+  //   display.setTextSize(4);
+  //   display.print("Sync");
+  //   display.setTextSize(2);
+  //   display.setCursor(8, 48);
+  //   display.print("Error");
+  // }
 
-  if ( bitRead(gaugeData.status2,6) == 1)
-  {
-    gauge_danger();
-  }
+  // if (bitRead(gaugeData.CEL, 7))
+  // {
+  //   display.setTextColor(WHITE);
+  //   dlength=3;
+  //   midpos=(63 - ((dlength * 23) / 2));
+  //   display.setCursor(29, 0);
+  //   display.setTextSize(4);
+  //   display.print("EGT");
+  //   display.setTextSize(2);
+  //   display.setCursor(8, 48);
+  //   display.print("Error");
+  // }
 
+  // if ( bitRead(gaugeData.status2,6) == 1)
+  // {
+  //   gauge_danger();
+  // }
 }
 
 void gauge_dashboard()
@@ -970,6 +960,10 @@ void gauge_single()
     }
     if (DEBUG_MODE)
     {
+      Serial.print("Encoder: ");
+      Serial.print(encoderIndex);
+      Serial.print(" Last: ");
+      Serial.println(encLastPos);
       Serial.print("Single: ");
       Serial.println(menuState.gaugeSinglePos);
     }
@@ -1254,6 +1248,10 @@ void gauge_graph()
 
     if (DEBUG_MODE)
     {
+      Serial.print("Encoder: ");
+      Serial.print(encoderIndex);
+      Serial.print(" Last: ");
+      Serial.println(encLastPos);
       Serial.print("Graph: ");
       Serial.println(menuState.gaugeGraphPos);
     }
@@ -1347,7 +1345,7 @@ void gauge_danger()
 {
   display.setTextSize(2);
   display.setTextColor(WHITE);
-  display.clearDisplay();;
+  display.clearDisplay();
   display.setCursor(0,0);
 
   display.setCursor(4,0);
@@ -1362,6 +1360,62 @@ void gauge_danger()
   display.setCursor(12,45);
   display.println("Manifold");
   display.display();
+}
+
+void shift_light()
+{
+  if (gaugeData.RPM > 4000)
+  {
+    if (gaugeData.RPM < gaugeSettings.shiftRPM)
+    {
+      uint8_t currLights = (gaugeData.RPM - 4000) / ((gaugeSettings.shiftRPM - 4000) / NUM_LEDS);
+
+      for (int i = 0; i < currLights; i++)
+      {
+        leds[i].setRGB(16, 0, 0);
+      }
+    }
+    else
+    {
+      for (int i = 0; i < NUM_LEDS; i++)
+      {
+        if (gaugeBlink)
+        {
+          uint8_t red = (255 * neo_brightness) / 16;
+          leds[i].setRGB(red, 0, 0);
+        }
+        else
+        {
+          leds[i].setRGB(0, 0, 0);
+        }
+      }
+    }
+  }
+  else
+  {
+    for(int i = 0; i < NUM_LEDS; i++)
+    {
+      leds[i].setRGB(0, 0, 0);
+    }
+  }
+  FastLED.show();
+}
+
+void warning_light()
+{
+  for (int i = 0; i < NUM_LEDS; i++)
+  {
+    if (gaugeBlink)
+    {
+      uint8_t red = (255 * neo_brightness) / 16;
+      leds[i].setRGB(red, 0, 0);
+    }
+    else
+    {
+      leds[i].setRGB(0, 0, 0);
+    }
+  }
+  FastLED.show();
 }
 
 void print_menu(String items[], int numItems, int currPos)
@@ -1382,183 +1436,4 @@ void print_menu(String items[], int numItems, int currPos)
       display.print(items[i]);
     }
   }
-}
-
-void neogauge(int val, byte led, byte enable_warning)
-{
-  unsigned int red, green, blue;
-  val = val/2;
-
-  if ( val > 500 )
-  {
-    if (enable_warning > 0)
-    {
-      leds[led].setRGB(0, 0, 0);
-      FastLED.show();
-      delay(50);
-      red = (255 * neo_brightness) / 16;
-      leds[led].setRGB(red, 0, 0);
-      FastLED.show();
-    }
-    else
-    {
-      red = (255 * neo_brightness) / 16;
-      leds[led].setRGB(red, 0, 0);
-      FastLED.show();
-    }
-  }
-  else if ( val < 0 )
-  {
-    if (enable_warning > 0)
-    {
-      leds[led].setRGB(0, 0, 0);
-      FastLED.show();
-      delay(50);
-      blue = (255 * neo_brightness) / 16;
-      leds[led].setRGB(0, 0, blue);
-      FastLED.show();
-    }
-    else
-    {
-      blue = (255 * neo_brightness) / 16;
-      leds[led].setRGB(0, 0, blue);
-      FastLED.show();
-    }
-  }
-  else if ((val >= 0) && (val <= 500))
-  {
-    red =   pgm_read_byte (&ledarray[val].r0);
-    green = pgm_read_byte (&ledarray[val].g0);
-    blue =  pgm_read_byte (&ledarray[val].b0);
-    red = (red * neo_brightness) / 16;
-    green = (green * neo_brightness) / 16;
-    blue = (blue * neo_brightness) / 16;
-    leds[led].setRGB(red, green, blue);
-    // FastLED.show();
-  }
-}
-
-void neogauge4led(int val, byte led0, byte led1, byte led2, byte led3, byte enable_warning)
-{
-  unsigned int red, green, blue;
-  val = val/2;
-
-  if ( val > 500 )
-  {
-    if (enable_warning > 0 && !gaugeBlink)
-    {
-      leds[led0].setRGB(0, 0, 0);
-      leds[led1].setRGB(0, 0, 0);
-      leds[led2].setRGB(0, 0, 0);
-      leds[led3].setRGB(0, 0, 0);
-    }
-    else
-    {
-      red = (255 * neo_brightness) / 16;
-      leds[led0].setRGB(red, 0, 0);
-      leds[led1].setRGB(red, 0, 0);
-      leds[led2].setRGB(red, 0, 0);
-      leds[led3].setRGB(red, 0, 0);
-    }
-
-  }
-  else if ( val < 0 )
-  {
-    if (enable_warning > 0 && !gaugeBlink)
-    {
-      leds[led0].setRGB(0, 0, 0);
-      leds[led1].setRGB(0, 0, 0);
-      leds[led2].setRGB(0, 0, 0);
-      leds[led3].setRGB(0, 0, 0);
-    }
-    else
-    {
-      blue = (255 * neo_brightness) / 16;
-      leds[led0].setRGB(0, 0, blue);
-      leds[led1].setRGB(0, 0, blue);
-      leds[led2].setRGB(0, 0, blue);
-      leds[led3].setRGB(0, 0, blue);
-    }
-  }
-  else
-  {
-    red   = pgm_read_byte (&ledarray[(val)].r0);
-    green = pgm_read_byte (&ledarray[(val)].g0);
-    blue  = pgm_read_byte (&ledarray[(val)].b0);
-    red = (red * neo_brightness) / 16;
-    green = (green * neo_brightness) / 16;
-    blue = (blue * neo_brightness) / 16;
-    leds[led0].setRGB(red, green, blue);
-
-    red   = pgm_read_byte (&ledarray[(val)].r1);
-    green = pgm_read_byte (&ledarray[(val)].g1);
-    blue  = pgm_read_byte (&ledarray[(val)].b1);
-    red = (red * neo_brightness) / 16;
-    green = (green * neo_brightness) / 16;
-    blue = (blue * neo_brightness) / 16;
-    leds[led1].setRGB(red, green, blue);
-
-    red   = pgm_read_byte (&ledarray[(val)].r2);
-    green = pgm_read_byte (&ledarray[(val)].g2);
-    blue  = pgm_read_byte (&ledarray[(val)].b2);
-    red = (red * neo_brightness) / 16;
-    green = (green * neo_brightness) / 16;
-    blue = (blue * neo_brightness) / 16;
-    leds[led2].setRGB(red, green, blue);
-
-    red   = pgm_read_byte (&ledarray[(val)].r3);
-    green = pgm_read_byte (&ledarray[(val)].g3);
-    blue  = pgm_read_byte (&ledarray[(val)].b3);
-    red = (red * neo_brightness) / 16;
-    green = (green * neo_brightness) / 16;
-    blue = (blue * neo_brightness) / 16;
-    leds[led3].setRGB(red, green, blue);
-  }
-}
-
-void write_neopixel()
-{
-  long temp;
-
-  temp = (gaugeData.RPM * 1000) / REVLIMIT;
-  neogauge4led(temp, 1, 0, 15, 14, 1); // RPM min 0 max REVLIMIT
-
-  temp = ((gaugeData.AFR * 2) * 100) / 59;
-  if (gaugeData.AFR <= 147)
-  {
-    temp = (pow((gaugeData.AFR - 147),3) / 150) + 500;
-  }
-  else if (gaugeData.AFR > 147)
-  {
-    temp = (pow((gaugeData.AFR - 147),3) / 20) + 500;
-  }
-
-  neogauge4led(temp, 9, 10, 11, 12, 0); // AFR
-
-  temp=gaugeData.TPS;
-  neogauge(temp, 2, 0); //TPS - min 0 max 1000
-
-  temp=(gaugeData.CLT * 5) / 12; //CLT - min ? mid 120 max 240
-  neogauge(temp, 4, 1);
-
-
-  temp=(gaugeData.MAT * 5) / 7; //MAT - min ? mid 70 max 140
-  neogauge(temp, 6, 0);
-
-  temp=gaugeData.MAP/2;
-  neogauge(temp, 8, 0); //MAP - min impossible mid 100kpa max 200kpa
-
-  // will need to play with this some, 50 looks reasonable though
-  temp=((gaugeData.AFR - gaugeData.AFR_tar) * 50) + 500;
-  neogauge(temp, 13, 0);
-
-  leds[3].setRGB(0, 0, 0); // unallocated
-  leds[5].setRGB(0, 0, 0);
-  leds[7].setRGB(0, 0, 0);
-
-  FastLED.show();
-
-//todo: oil temp, oil pressure, EGT
-//todo: rearrange LED's into something nicer
-//todo: might be faster to do a final FastLED.show here instead of inside the neogauge functions
 }
