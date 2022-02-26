@@ -1,11 +1,11 @@
 // Constants
 const int NUM_VIEWS                     = 4;      // Number of gauge views
-const int NUM_SETTINGS                  = 3;      // Number of settings
+const int NUM_SETTINGS                  = 5;      // Number of settings
 const int NUM_GAUGES                    = 16;     // Number of gauges
 const int NUM_GRAPHS                    = 3;      // Number of graph gauges
 
 const String VIEWS[NUM_VIEWS] = {"Dashboard", "Single", "Graph", "Settings"};
-const String SETTINGS[NUM_SETTINGS] = {"LED Ring", "Shift RPM", "Exit"};
+const String SETTINGS[NUM_SETTINGS] = {"LED Ring", "Shift RPM", "Warnings", "Coolant Warn", "Exit"};
 const String GAUGES[NUM_GAUGES] = {"RPM", "AFR", "Coolant", "MAP", "MAT", "Timing", "Voltage", "TPS", "Knock", "Barometer", "EGO Corr", "IAC", "Spark Dwell", "Boost Duty", "Idle Target", "AFR Target"};
 const String GRAPHS[NUM_GRAPHS] = {"AFR", "MAP", "MAT"};
 
@@ -13,6 +13,8 @@ const String GRAPHS[NUM_GRAPHS] = {"AFR", "MAP", "MAT"};
 const uint8_t EEPROM_INIT       = 0;
 const uint8_t RING_ENABLE_ADDR  = 1;
 const uint8_t SHIFT_RPM_ADDR    = 2;
+const uint8_t WARN_ENABLE_ADDR  = 4;
+const uint8_t CLT_WARN_ADDR     = 5;
 
 const uint8_t EEPROM_VALID = 13;
 
@@ -33,6 +35,8 @@ struct Settings
   bool dirty = false;
   bool LEDRingEnable = true;
   uint16_t shiftRPM = 6800;
+  bool warningsEnable = true;
+  uint16_t coolantWarning = 240;
 };
 
 struct GaugeData
