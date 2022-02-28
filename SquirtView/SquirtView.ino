@@ -139,9 +139,6 @@ void setup(void)
 
   delay(1000);
   digitalWrite(TEENSY_LED, 0);
-
-  // TODO: DEBUG
-  gaugeData.RPM = 6700;
 }
 
 // -------------------------------------------------------------
@@ -169,11 +166,7 @@ void loop(void)
     display.setCursor(0,0);
     display.display();
 
-    for(int i = 0; i < NUM_LEDS; i++)
-    {
-      leds[i].setRGB(0, 0, 0); // initialize led ring
-    }
-    FastLED.show();
+    no_light();
     commTimer.reset();
     connectionState = false;
   }
@@ -189,11 +182,7 @@ void loop(void)
     }
     else
     {
-      for(int i = 0; i < NUM_LEDS; i++)
-      {
-        leds[i].setRGB(0, 0, 0);
-      }
-      FastLED.show();
+      no_light();
     }
 
     if (menuState.inMenu)
@@ -1414,6 +1403,15 @@ void warning_light()
     {
       leds[i].setRGB(0, 0, 0);
     }
+  }
+  FastLED.show();
+}
+
+void no_light()
+{
+  for(int i = 0; i < NUM_LEDS; i++)
+  {
+    leds[i].setRGB(0, 0, 0);
   }
   FastLED.show();
 }

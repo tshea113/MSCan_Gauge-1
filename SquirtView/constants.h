@@ -20,21 +20,6 @@ const int MS_DATA_NAME_MAX_LENGTH       = 10;     // Maximum length of MS data f
 const int MS_DATA_BIN_NAME_MAX_LENGTH   = 14;     // Maximum length of MS data field name
 
 // Program memory constants
-struct ledval
-{
-  byte r0;
-  byte g0;
-  byte b0;
-  byte r1;
-  byte g1;
-  byte b1;
-  byte r2;
-  byte g2;
-  byte b2;
-  byte r3;
-  byte g3;
-  byte b3;
-};
 const unsigned char miata_logo [] PROGMEM = 
 {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
