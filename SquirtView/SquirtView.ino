@@ -231,7 +231,7 @@ void loop(void)
 // interrupt handler for the encoder button
 void ISR_debounce ()
 {
-  if((long)(millis() - last_millis) >= (DEBOUNCING_TIME * 10))
+  if((unsigned long)(millis() - last_millis) >= (DEBOUNCING_TIME * 10))
   {
     buttonPressed = true;
     encoderIndex = 0;
@@ -380,14 +380,11 @@ boolean value_oob()
 {
   if (gaugeData.RPM > 100)
   {
-    if ((gaugeData.CLT/10) > gaugeSettings.coolantWarning) return 1;
-    // if (gaugeData.CEL != 0) return 1;
-    if (bitRead(gaugeData.status2,6)) return 1; // overboost
+    if ((gaugeData.CLT/10) > gaugeSettings.coolantWarning) return true;
+    // if (gaugeData.CEL != 0) return true;
+    if (bitRead(gaugeData.status2,6)) return true; // overboost
   } 
-  else
-  {
-    return false;
-  }
+  return false;
 }
 
 void menu_check()
@@ -599,7 +596,7 @@ void display_settings()
 
 void gauge_warning()
 {
-  byte dlength, llength;
+  byte dlength;
   int midpos;
 
   display.clearDisplay();
@@ -927,10 +924,9 @@ void gauge_bottom()
 
 void gauge_single()
 {
-  byte mult_test;
   char data[10];
   String label;
-  byte temp_index;
+  // byte temp_index;
   display.clearDisplay();
 
   // Check for rotations
@@ -1067,7 +1063,6 @@ void gauge_single()
   // }
 
   byte dlength=strlen(data);
-  byte llength=label.length();
   int midpos;
 
   // dlength * (width of font) / 2 -1
@@ -1275,6 +1270,8 @@ void gauge_graph()
         val = 50;
       }
       break;
+    default:
+      val = 0;
     }
 
     histogram_index++;
@@ -1416,7 +1413,7 @@ void no_light()
   FastLED.show();
 }
 
-void print_menu(String items[], int numItems, int currPos)
+void print_menu(const String items[], int numItems, int currPos)
 {
   display.setTextSize(1);
   for (int i = 0; i < numItems; i++)
