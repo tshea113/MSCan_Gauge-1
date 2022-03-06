@@ -24,12 +24,9 @@ This project is a continuation of the work done by [merkur2k](https://github.com
 ## Component BOM
 Passives are 1206 package unless otherwise noted.
 * R1 - 10K
-* R2 - 120 ohm
-* R3 - 10K (only required for headlight sense)
-* R4 - 4K (only required for headlight sense)
 * C1 - 10uF
 * IC1 - SN65HVD230 (or similar) CAN transceiver
-* VR1 - Recom R-78 5V switching regulator. 500mA may work but 1A is recommended. LM7805 analog regulator is not recommended due to there being not enough room for a heatsink
-* 2.54mm spacing pin headers - various lengths. 15mm for OLED (may need trimmed). Standard length for everything else. 8 position right angle female for OLED
-* 2.54mm spacing 8 position screw terminal for outside connections
-* 3 and 4 position mating headers or connectors for encoder and led ring connections
+* VR1 - TSR 1-2450 DC/DC Converter. 500mA may work but 1A is recommended.
+* 2.54mm spacing pin headers - standard length
+* 8 way Molex Micro-fit+ connectors (Cable mount male and PCB mount female) and associated pins.
+* 3 and 4 position mating headers or connectors for OLED screen and led ring connections
