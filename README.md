@@ -16,8 +16,9 @@ This project is a continuation of the work done by [merkur2k](https://github.com
 * [Metro](https://www.pjrc.com/teensy/arduino_libraries/Metro.zip) - event scheduling
 * [Time](https://www.pjrc.com/teensy/arduino_libraries/Time.zip) - onboard clock
 * [FlexCAN](https://github.com/collin80/FlexCAN_Library) - CAN bus
-* [SSD1306](https://www.pjrc.com/teensy/arduino_libraries/Adafruit_SSD1306.zip) - OLED display
+* [SSD1306](https://github.com/adafruit/Adafruit_SSD1306) - OLED display
 * [Adafruit GFX](https://github.com/adafruit/Adafruit-GFX-Library) - required by SSD1306
+* [Adafruit BusIO](https://github.com/adafruit/Adafruit_BusIO) - I2C and SPI library
 * [FastLED](https://github.com/FastLED/FastLED) - LED ring
 * [Encoder](https://www.pjrc.com/teensy/arduino_libraries/Encoder.zip) - rotary encoder
 
