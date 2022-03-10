@@ -16,7 +16,7 @@ const uint8_t SHIFT_RPM_ADDR    = 2;
 const uint8_t WARN_ENABLE_ADDR  = 4;
 const uint8_t CLT_WARN_ADDR     = 5;
 
-const uint8_t EEPROM_VALID = 13;
+const uint8_t EEPROM_VALID = 4;
 
 // Data Structures
 struct MenuState
