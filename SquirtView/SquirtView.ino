@@ -5,20 +5,21 @@
 #include <Adafruit_SSD1306.h>
 #include <TimeLib.h>
 #include <FastLED.h>
-#include <Encoder.h>
+#include <EncoderTool.h>
 #include <EEPROM.h>
 
-#include "RotKnob.h"
 #include "MegasquirtMessages.h"
 #include "definitions.h"
 #include "constants.h"
 #include "GaugeData.h"
 
+using namespace EncoderTool;
+
 // FastLED
 CRGB leds[NUM_LEDS];
 
 // Encoder
-rotKnob<ENC_PIN_1, ENC_PIN_2> myEnc;
+Encoder myEnc;
 int16_t encoderIndex;
 int16_t encLastPos;
 bool buttonPressed;
@@ -132,9 +133,8 @@ void setup(void)
     }
   }
 
-  // Encoder has values from -32,768 to 32,767 starting at 0
-  myEnc.begin();
-  encLastPos = myEnc.read();
+  myEnc.begin(ENC_PIN_1, ENC_PIN_2);
+  encLastPos = myEnc.getValue();
   buttonPressed = false;
 
   delay(1000);
@@ -236,7 +236,7 @@ void ISR_debounce ()
     buttonPressed = true;
     encoderIndex = 0;
     encLastPos = 0;
-    myEnc.write(0);
+    myEnc.setValue(0);
   }
   else
   {
@@ -392,6 +392,7 @@ void menu_check()
   // Pressing the button brings up the menu or selects position
   if (buttonPressed)
   {
+    // Settings Menu
     if (menuState.inSettings)
     {
       // Exit is always the last item
@@ -422,17 +423,27 @@ void menu_check()
         menuState.settingSelect = !menuState.settingSelect;
       }
     }
+    // Views Menu
     else
     {
       // Settings is always the last item
       if (menuState.menuPos == NUM_VIEWS - 1)
       {
         menuState.inSettings = true;
+        myEnc.setLimits(0, NUM_SETTINGS - 1, true);
       }
       else
       {
-        if (!menuState.inMenu) menuState.menuPos = 0;
-        menuState.inMenu = !menuState.inMenu;
+        if (!menuState.inMenu)
+        {
+          menuState.menuPos = 0;
+          menuState.inMenu = true;
+          myEnc.setLimits(0, NUM_VIEWS - 1, true);
+        }
+        else
+        {
+          menuState.inMenu = false;
+        }
       }
     }
 
@@ -443,19 +454,12 @@ void menu_check()
 void display_menu()
 {
   // Check for rotations
-  if (myEnc.available())
+  if (myEnc.valueChanged())
   {
     encLastPos = encoderIndex;
-    encoderIndex=myEnc.read();
+    encoderIndex=myEnc.getValue();
 
-    if (encoderIndex > encLastPos && menuState.menuPos < NUM_VIEWS - 1)
-    {
-      menuState.menuPos++;
-    }
-    else if (encoderIndex < encLastPos && menuState.menuPos > 0)
-    {
-      menuState.menuPos--;
-    }
+    menuState.menuPos = myEnc.getValue();
 
     if (DEBUG_MODE)
     {
@@ -476,10 +480,10 @@ void display_menu()
 void display_settings()
 {
   // Check for rotations
-  if (myEnc.available())
+  if (myEnc.valueChanged())
   {
     encLastPos = encoderIndex;
-    encoderIndex=myEnc.read();
+    encoderIndex=myEnc.getValue();
 
     if (menuState.settingSelect)
     {
@@ -930,10 +934,10 @@ void gauge_single()
   display.clearDisplay();
 
   // Check for rotations
-  if (myEnc.available())
+  if (myEnc.valueChanged())
   {
     encLastPos = encoderIndex;
-    encoderIndex=myEnc.read();
+    encoderIndex=myEnc.getValue();
   
     if (encoderIndex > encLastPos && menuState.gaugeSinglePos < NUM_GAUGES - 1)
     {
@@ -1216,10 +1220,10 @@ void gauge_graph()
   byte val;
   
   // Check for rotations
-  if (myEnc.available())
+  if (myEnc.valueChanged())
   {
     encLastPos = encoderIndex;
-    encoderIndex=myEnc.read();
+    encoderIndex=myEnc.getValue();
   
     if (encoderIndex > encLastPos && menuState.gaugeGraphPos < NUM_GRAPHS - 1)
     {
