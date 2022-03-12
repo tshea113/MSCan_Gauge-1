@@ -1251,6 +1251,7 @@ void GraphView()
     display.setTextSize(2);
     display.setTextColor(WHITE);
     display.print(kGraphs[menuState.gauge_graph_position]);
+    display.print(" ");
 
     switch (static_cast<Graphs>(menuState.gauge_graph_position))
     {
