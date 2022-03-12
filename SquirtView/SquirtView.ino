@@ -25,6 +25,8 @@ bool buttonPressed;
 volatile unsigned long last_millis;   //switch debouncing
 
 // FlexCAN
+// Teensy 3.2 only has CAN0, but Teensy 4.0 has CAN1, CAN2, and CAN3, so we must
+// set these up based upon the device for which we are compiling.
 #if defined(__MK20DX256__) || defined(__MK64FX512__) // Teensy 3.2/3.5
   FlexCAN_T4<CAN0, RX_SIZE_256, TX_SIZE_16> myCan;
 #endif
