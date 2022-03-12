@@ -104,6 +104,18 @@ void setup(void)
     EEPROM.write(EEPROM_INIT, EEPROM_VALID);
   }
 
+  if (DEBUG_MODE)
+  {
+    Serial.print("LED Ring Enable: ");
+    Serial.println(gaugeSettings.LEDRingEnable);
+    Serial.print("Shift RPM: ");
+    Serial.println(gaugeSettings.shiftRPM);
+    Serial.print("Warnings Enable: ");
+    Serial.println(gaugeSettings.warningsEnable);
+    Serial.print("Coolant Warning: ");
+    Serial.println(gaugeSettings.coolantWarning);
+  }
+
   myCan.begin();
   myCan.setBaudRate(CAN_BAUD);
 
@@ -113,15 +125,15 @@ void setup(void)
   attachInterrupt(RBUTTON_INT, ISR_debounce, FALLING);
 
   // By default, we'll generate the high voltage from the 3.3v line internally! (neat!)
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
-
+  display.begin(SSD1306_SWITCHCAPVCC, SCREEN_I2C_ADDR);
+  
   // Show splashscreen
   display.clearDisplay();
   display.drawBitmap(0,0, miata_logo, 128, 64, 1);
   display.display();
 
   FastLED.addLeds<NEOPIXEL, LEDPIN>(leds, NUM_LEDS);
-  
+
   // Ring initialization animation
   if (gaugeSettings.LEDRingEnable)
   {
