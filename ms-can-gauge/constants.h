@@ -1,9 +1,9 @@
 #include <avr/pgmspace.h>
 
 // User configuerable constants
-const int kMyCanId      = 10;     // CAN ID of this unit
-const int kMsCanId      = 0;      // CAN ID of the Megasquirt (should almost always be 0)
-const bool    kDebugMode    = false;  // Debug mode for testing menus, screens, etc.
+const int  kMyCanId      = 10;     // CAN ID of this unit
+const int  kMsCanId      = 0;      // CAN ID of the Megasquirt (should almost always be 0)
+const bool kDebugMode    = false;  // Debug mode for testing menus, screens, etc.
 
 // Constants
 const uint8_t kScreenI2cAddress           = 0x3D;   // I2C address of the OLED screen
