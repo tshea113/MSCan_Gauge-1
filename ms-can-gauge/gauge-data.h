@@ -9,7 +9,7 @@ const String kSettings[kNumSettings] = {"LED Ring", "Shift RPM", "Warnings", "Co
 const String kGauges[kNumGauges] = {"RPM", "AFR", "Coolant", "MAP", "MAT", "Timing", "Voltage", "TPS", "Knock", "Barometer", "EGO Corr", "IAC", "Spark Dwell", "Boost Duty", "Idle Target", "AFR Target"};
 const String kGraphs[kNumGraphs] = {"AFR", "MAP", "MAT"};
 
-enum ViewsMenu : uint8_t
+enum ViewsMenu : int
 {
   kDashboardView = 0,
   kSingleView = 1,
@@ -17,7 +17,7 @@ enum ViewsMenu : uint8_t
   kSettingView = 3
 };
 
-enum SettingMenu : uint8_t
+enum SettingMenu : int
 {
   kLedRingEnableSetting = 0,
   kShiftRPMSetting = 1,
@@ -26,7 +26,7 @@ enum SettingMenu : uint8_t
   kExitSetting = 4
 };
 
-enum Gauges : uint8_t
+enum Gauges : int
 {
   kRPMGauge = 0,
   kAFRGauge = 1,
@@ -46,7 +46,7 @@ enum Gauges : uint8_t
   kAfrTargetGauge = 15
 };
 
-enum Graphs : uint8_t
+enum Graphs : int
 {
   kAFRGraph = 0,
   kMAPGraph = 1,
@@ -60,59 +60,59 @@ const uint8_t kShiftRpmAddr       = 2;
 const uint8_t kWarningEnableAddr  = 4;
 const uint8_t kCoolantWarningAddr = 5;
 
-const uint8_t kEEPROMValidId = 4;
+const int kEEPROMValidId = 4;
 
 // Data Structures
 struct MenuState
 {
-  bool inMenu = false;
-  bool inSettings = false;
-  bool settingSelect = false;
-  uint8_t menuPos = 0;
-  uint8_t settingsPos = 0;
-  uint8_t gaugeSinglePos = 0;
-  uint8_t gaugeGraphPos = 0;
+  bool in_menu = false;
+  bool in_settings = false;
+  bool is_setting_selected = false;
+  uint8_t menu_position = 0;
+  uint8_t settings_position = 0;
+  uint8_t gauge_single_position = 0;
+  uint8_t gauge_graph_position = 0;
 };
 
 struct Settings
 {
   bool dirty = false;
-  bool LEDRingEnable = true;
-  uint16_t shiftRPM = 6800;
-  bool warningsEnable = true;
-  uint16_t coolantWarning = 240;
+  bool led_ring_enable = true;
+  int shift_rpm = 6800;
+  bool warnings_enable = true;
+  int coolant_warning_temp = 240;
 };
 
 struct GaugeData
 {
-  unsigned int RPM;
-  unsigned int CLT;
-  unsigned int MAP;
-  unsigned int MAT;
-  unsigned int SPKADV;
-  unsigned int BATTV;
-  unsigned int TPS;
-  unsigned int Knock;
-  unsigned int Baro;
-  unsigned int EGOc;
-  unsigned int IAC;
-  unsigned int dwell;
-  unsigned int bstduty;
-  unsigned int idle_tar;
-  int AFR;
-  int AFR_tar;
-  unsigned int MAP_highest;
-  unsigned int RPM_highest;
-  unsigned int CLT_highest;
-  unsigned int MAT_highest;
-  unsigned int Knock_highest;
-  int AFR_highest;
-  int AFR_lowest;
+  int rpm;
+  int coolant_temp;
+  int map;
+  int mat;
+  int spark_advance;
+  int battery_voltage;
+  int tps;
+  int knock;
+  int barometer;
+  int ego_correction;
+  int iac;
+  int dwell;
+  int boost_duty;
+  int idle_target;
+  int afr;
+  int afr_target;
+  int map_highest;
+  int rpm_highest;
+  int coolant_temp_highest;
+  int mat_highest;
+  int knock_highest;
+  int afr_highest;
+  int afr_lowest;
   uint8_t engine;
-  uint8_t CEL;
-  uint8_t status1;
-  uint8_t status2;
-  uint8_t status3;
-  uint8_t status6;
-  uint8_t status7;
+  uint8_t check_engine_light;
+  uint8_t status_1;
+  uint8_t status_2;
+  uint8_t status_3;
+  uint8_t status_6;
+  uint8_t status_7;
 };
