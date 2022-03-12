@@ -65,54 +65,54 @@ const int kEEPROMValidId = 4;
 // Data Structures
 struct MenuState
 {
-  bool inMenu = false;
-  bool inSettings = false;
-  bool settingSelect = false;
-  uint8_t menuPos = 0;
-  uint8_t settingsPos = 0;
-  uint8_t gaugeSinglePos = 0;
-  uint8_t gaugeGraphPos = 0;
+  bool in_menu = false;
+  bool in_settings = false;
+  bool is_setting_selected = false;
+  uint8_t menu_position = 0;
+  uint8_t settings_position = 0;
+  uint8_t gauge_single_position = 0;
+  uint8_t gauge_graph_position = 0;
 };
 
 struct Settings
 {
   bool dirty = false;
-  bool LEDRingEnable = true;
-  int shiftRPM = 6800;
-  bool warningsEnable = true;
-  int coolantWarning = 240;
+  bool led_ring_enable = true;
+  int shift_rpm = 6800;
+  bool warnings_enable = true;
+  int coolant_warning_temp = 240;
 };
 
 struct GaugeData
 {
-  int RPM;
-  int CLT;
-  int MAP;
-  int MAT;
-  int SPKADV;
-  int BATTV;
-  int TPS;
-  int Knock;
-  int Baro;
-  int EGOc;
-  int IAC;
+  int rpm;
+  int coolant_temp;
+  int map;
+  int mat;
+  int spark_advance;
+  int battery_voltage;
+  int tps;
+  int knock;
+  int barometer;
+  int ego_correction;
+  int iac;
   int dwell;
-  int bstduty;
-  int idle_tar;
-  int AFR;
-  int AFR_tar;
-  int MAP_highest;
-  int RPM_highest;
-  int CLT_highest;
-  int MAT_highest;
-  int Knock_highest;
-  int AFR_highest;
-  int AFR_lowest;
+  int boost_duty;
+  int idle_target;
+  int afr;
+  int afr_target;
+  int map_highest;
+  int rpm_highest;
+  int coolant_temp_highest;
+  int mat_highest;
+  int knock_highest;
+  int afr_highest;
+  int afr_lowest;
   uint8_t engine;
-  uint8_t CEL;
-  uint8_t status1;
-  uint8_t status2;
-  uint8_t status3;
-  uint8_t status6;
-  uint8_t status7;
+  uint8_t check_engine_light;
+  uint8_t status_1;
+  uint8_t status_2;
+  uint8_t status_3;
+  uint8_t status_6;
+  uint8_t status_7;
 };
