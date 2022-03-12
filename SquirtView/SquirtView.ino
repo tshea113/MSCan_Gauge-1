@@ -1,5 +1,5 @@
 #include <Metro.h>
-#include <FlexCAN.h>
+#include <FlexCAN_T4.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -23,6 +23,16 @@ int16_t encoderIndex;
 int16_t encLastPos;
 bool buttonPressed;
 volatile unsigned long last_millis;   //switch debouncing
+
+// FlexCAN
+// Teensy 3.2 only has CAN0, but Teensy 4.0 has CAN1, CAN2, and CAN3, so we must
+// set these up based upon the device for which we are compiling.
+#if defined(__MK20DX256__) || defined(__MK64FX512__) // Teensy 3.2/3.5
+  FlexCAN_T4<CAN0, RX_SIZE_256, TX_SIZE_16> myCan;
+#endif
+#if defined(__IMXRT1062__) // Teensy 4.0
+  FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> myCan;
+#endif
 
 // OLED Display I2C
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
@@ -93,7 +103,8 @@ void setup(void)
     EEPROM.write(EEPROM_INIT, EEPROM_VALID);
   }
 
-  Can0.begin(CAN_BAUD);
+  myCan.begin();
+  myCan.setBaudRate(CAN_BAUD);
 
   // Set encoder pins as input with internal pull-up resistors enabled
   pinMode(RBUTTON_INT, INPUT);
@@ -218,7 +229,7 @@ void loop(void)
   }
 
   // handle received CAN frames
-  if (Can0.read(rxmsg) && !DEBUG_MODE)
+  if (myCan.read(rxmsg) && !DEBUG_MODE)
   {
     commTimer.reset();
     connectionState = true;
@@ -312,7 +323,7 @@ void read_CAN_message()
   default: 
     // not a broadcast packet
     // assume this is a normal Megasquirt CAN protocol packet and decode the header
-    if (rxmsg.ext)
+    if (rxmsg.flags.extended)
     {
       rxmsg_id.i = rxmsg.id;
       // is this being sent to us?
@@ -331,7 +342,7 @@ void read_CAN_message()
           txmsg_id.values.from_id = myCANid;
           txmsg_id.values.block = msg_req_data.values.varblk;
           txmsg_id.values.offset = msg_req_data.values.varoffset;
-          txmsg.ext = 1;
+          txmsg.flags.extended = 1;
           txmsg.id = txmsg_id.i;
           txmsg.len = 8;
           // Use the same block and offset as JBPerf IO expander board for compatibility reasons
@@ -362,7 +373,7 @@ void read_CAN_message()
               txmsg.buf[6] = year() / 256;
               txmsg.buf[7] = year() % 256;
               // send the message!
-              Can0.write(txmsg);
+              myCan.write(txmsg);
             }
           } 
         }
