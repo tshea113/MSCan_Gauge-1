@@ -1108,6 +1108,10 @@ void SingleView()
   display.setCursor(8, (63 - 15));
   display.print(label);
 
+  display.setCursor(0, 0);
+  display.setTextSize(1);
+  display.print(menuState.gaugeSinglePos + 1);
+
   //Additional data for highest/lowest value
   if (menuState.gaugeSinglePos == 0)
   {
@@ -1301,7 +1305,7 @@ void GraphView()
       display.drawFastVLine((127 - (i * 2)), (64 - histogram[x]), 64, WHITE);
     }
 
-    display.setCursor(8,0);
+    display.setCursor(20,0);
     display.setTextSize(2);
     display.setTextColor(WHITE);
 
@@ -1331,6 +1335,10 @@ void GraphView()
       display.print(gaugeData.MAT / 10);
       break;
     }
+
+    display.setCursor(0, 0);
+    display.setTextSize(1);
+    display.print(menuState.gaugeGraphPos + 1);
 
     validity_window = millis();
   }
