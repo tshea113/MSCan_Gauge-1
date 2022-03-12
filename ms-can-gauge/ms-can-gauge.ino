@@ -1316,7 +1316,8 @@ void ShiftLightView()
 
       for (int i = 0; i < currLights; i++)
       {
-        leds[i].setRGB(16, 0, 0);
+        uint8_t red = (255 * neo_brightness) / 16;
+        leds[i].setRGB(red, 0, 0);
       }
     }
     else
