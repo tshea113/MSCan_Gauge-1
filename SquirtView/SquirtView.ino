@@ -448,15 +448,15 @@ void MenuCheck()
           myEnc.setValue(gaugeSettings.LEDRingEnable);
           break;
         case kShiftRPMSetting:
-          myEnc.setLimits(MIN_RPM/RPM_INTERVAL, MAX_RPM/RPM_INTERVAL, true);
-          myEnc.setValue(gaugeSettings.shiftRPM/RPM_INTERVAL);
+          myEnc.setLimits(kMinRpm/kRpmInterval, kMaxRpm/kRpmInterval, true);
+          myEnc.setValue(gaugeSettings.shiftRPM/kRpmInterval);
           break;
         case kWarningsEnableSetting:
           myEnc.setLimits(0, 1, true);
           myEnc.setValue(gaugeSettings.warningsEnable);
           break;
         case kCoolantWarningSetting:
-          myEnc.setLimits(0, MAX_CLT, true);
+          myEnc.setLimits(0, kMaxCoolantTemp, true);
           myEnc.setValue(gaugeSettings.coolantWarning);
           break;
         case kExitSetting:
@@ -565,7 +565,7 @@ void SettingsView()
         gaugeSettings.LEDRingEnable = encoderIndex;
         break;
       case kShiftRPMSetting:
-        gaugeSettings.shiftRPM = encoderIndex * RPM_INTERVAL;
+        gaugeSettings.shiftRPM = encoderIndex * kRpmInterval;
         break;
       case kWarningsEnableSetting:
         gaugeSettings.warningsEnable = encoderIndex;

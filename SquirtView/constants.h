@@ -1,26 +1,32 @@
 #include <avr/pgmspace.h>
 
 // User configuerable constants
-const int kMyCanId      = 10;     // CAN ID of this unit
-const int kMsCanId      = 0;      // CAN ID of the Megasquirt (should almost always be 0)
-const bool kDebugMode   = false;  // Debug mode for testing menus, screens, etc.
+const uint8_t kMyCanId      = 10;     // CAN ID of this unit
+const uint8_t kMsCanId      = 0;      // CAN ID of the Megasquirt (should almost always be 0)
+const bool    kDebugMode    = false;  // Debug mode for testing menus, screens, etc.
 
 // Constants
-const int kScreenI2cAddress               = 0x3D;   // I2C address of the OLED screen
-const int kCanTimeout                     = 1000;   // Display an error message if no CAN data during this interval
-const int kDisplayRefresh                 = 100;    // Refresh the display at this interval
-const int kLedFlashTimer                  = 1;      // How long to flash the led upon CAN frame receive/transmit
-const int kGaugeFlashTimer                = 50;     // Blink the led ring pixels during certain conditions
-const int kNumLeds                        = 16;     // Number of LEDs on the NeoPixel ring
-const unsigned long kDebounceTime         = 25;     // Debouncing Time - 150 is good, 200 is better, 250 seems worse
-const int kOledHeight                     = 64;     // Height of the OLED screen in pixels
-const int kOledWidth                      = 128;    // Width of the OLED screen in pixels
-const int kCanBaud                        = 500000; // CAN baud rate
-const int kMsDataNameMaxLength            = 10;     // Maximum length of MS data field name
-const int kMsDataBinNameMaxLength         = 14;     // Maximum length of MS data field name
+const uint8_t  kScreenI2cAddress               = 0x3D;   // I2C address of the OLED screen
+const uint16_t kCanTimeout                     = 1000;   // Display an error message if no CAN data during this interval
+const uint8_t  kDisplayRefresh                 = 100;    // Refresh the display at this interval
+const uint8_t  kLedFlashTimer                  = 1;      // How long to flash the led upon CAN frame receive/transmit
+const uint16_t kGaugeFlashTimer                = 50;     // Blink the led ring pixels during certain conditions
+const uint8_t  kNumLeds                        = 16;     // Number of LEDs on the NeoPixel ring
+const uint8_t  kDebounceTime                   = 25;     // Debouncing Time - 150 is good, 200 is better, 250 seems worse
+const uint8_t  kOledHeight                     = 64;     // Height of the OLED screen in pixels
+const uint8_t  kOledWidth                      = 128;    // Width of the OLED screen in pixels
+const uint32_t kCanBaud                        = 500000; // CAN baud rate
+const uint8_t  kMsDataNameMaxLength            = 10;     // Maximum length of MS data field name
+const uint8_t  kMsDataBinNameMaxLength         = 14;     // Maximum length of MS data field name
+
+// Settings Constraints
+const uint16_t kMinRpm          = 5000;    // Minimum RPM for shift light setting
+const uint16_t kMaxRpm          = 9900;    // Maximum RPM for shift light setting
+const uint16_t kRpmInterval     = 100;     // Smallest interval for shift light setting
+const uint16_t kMaxCoolantTemp  = 300;     // Maximum coolant temp for warning
 
 // Program memory constants
-const unsigned char miata_logo [] PROGMEM = 
+const uint8_t miata_logo [] PROGMEM = 
 {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -91,10 +97,10 @@ const unsigned char miata_logo [] PROGMEM =
 struct MSDataObject
 {
   char name[kMsDataNameMaxLength];
-  byte block;                         // max val 32?
-  unsigned int offset;                // max val?
-  byte reqbytes;                      // max val 8
-  byte mult;                          // does this need to be * 0.1 ?
+  uint8_t block;                      // max val 32?
+  uint16_t offset;                    // max val?
+  uint8_t reqbytes;                   // max val 8
+  uint8_t mult;                       // does this need to be * 0.1 ?
 };
 
 const MSDataObject MSData[] PROGMEM =
@@ -121,8 +127,8 @@ const MSDataObject MSData[] PROGMEM =
 struct MSDataBinaryObject 
 {
   char name[kMsDataBinNameMaxLength];
-  byte sbyte;
-  byte bitp;
+  uint8_t sbyte;
+  uint8_t bitp;
 };
 
 const MSDataBinaryObject MSDataBin[] PROGMEM =
