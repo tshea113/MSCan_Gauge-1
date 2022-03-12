@@ -20,7 +20,7 @@ CRGB leds[kNumLeds];
 
 // Encoder
 Encoder myEnc;
-int16_t encoderIndex;
+int encoderIndex;
 bool buttonPressed;
 volatile unsigned long last_millis;   //switch debouncing
 
@@ -52,8 +52,8 @@ GaugeData gaugeData;
 MenuState menuState;
 Settings gaugeSettings;
 
-byte neo_brightness = 1;
-byte g_textsize = 1;
+int neo_brightness = 1;
+int g_textsize = 1;
 char tempchars[11];
 
 static CAN_message_t txmsg,rxmsg;
@@ -84,7 +84,7 @@ void setup(void)
   // we check that all values are written before starting.
   if (EEPROM.read(kEEPROMInitAddr) != kEEPROMValidId)
   {
-    for(uint8_t numSettings = EEPROM.read(kEEPROMInitAddr); numSettings <= kEEPROMValidId; numSettings++)
+    for(int numSettings = EEPROM.read(kEEPROMInitAddr); numSettings <= kEEPROMValidId; numSettings++)
     {
       switch (numSettings)
       {
