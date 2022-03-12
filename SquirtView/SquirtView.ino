@@ -21,7 +21,6 @@ CRGB leds[NUM_LEDS];
 // Encoder
 Encoder myEnc;
 int16_t encoderIndex;
-int16_t encLastPos;
 bool buttonPressed;
 volatile unsigned long last_millis;   //switch debouncing
 
@@ -126,7 +125,7 @@ void setup(void)
 
   // By default, we'll generate the high voltage from the 3.3v line internally! (neat!)
   display.begin(SSD1306_SWITCHCAPVCC, SCREEN_I2C_ADDR);
-  
+
   // Show splashscreen
   display.clearDisplay();
   display.drawBitmap(0,0, miata_logo, 128, 64, 1);
@@ -157,7 +156,6 @@ void setup(void)
   }
 
   myEnc.begin(ENC_PIN_1, ENC_PIN_2);
-  encLastPos = myEnc.getValue();
   buttonPressed = false;
 
   delay(1000);
@@ -220,15 +218,15 @@ void loop(void)
       }
       else
       {
-        switch (menuState.menuPos)
+        switch (static_cast<ViewsMenu>(menuState.menuPos))
         {
-        case 0:
+        case Dashboard:
           gauge_dashboard();
           break;
-        case 1:
+        case Single:
           gauge_single();
           break;
-        case 2:
+        case Graph:
           gauge_graph();
           break;
         default:
@@ -254,11 +252,13 @@ void loop(void)
 // interrupt handler for the encoder button
 void ISR_debounce ()
 {
+  // TODO: Probably shouldn't delay inside of an interrupt
   if((unsigned long)(millis() - last_millis) >= (DEBOUNCING_TIME * 10))
   {
     buttonPressed = true;
+
+    // Return to a safe state after button press
     encoderIndex = 0;
-    encLastPos = 0;
     myEnc.setValue(0);
   }
   else
@@ -422,8 +422,9 @@ void menu_check()
       if (menuState.settingsPos == NUM_SETTINGS - 1)
       {
         menuState.settingsPos = 0;
-        menuState.menuPos = 0;
         menuState.inSettings = false;
+        myEnc.setLimits(0, NUM_VIEWS - 1, true);
+        myEnc.setValue(menuState.menuPos);
 
         if (gaugeSettings.dirty)
         {
@@ -441,9 +442,40 @@ void menu_check()
           gaugeSettings.dirty = false;
         }
       }
+      // Setting is selected
       else
       {
-        menuState.settingSelect = !menuState.settingSelect;
+        // Confirm settings value
+        if (menuState.settingSelect)
+        {
+          menuState.settingSelect = false;
+          myEnc.setLimits(0, NUM_SETTINGS - 1, true);
+          myEnc.setValue(menuState.settingsPos);
+        }
+        // A setting is selected
+        else
+        {
+          menuState.settingSelect = true;
+          switch (static_cast<SettingMenu>(menuState.settingsPos))
+          {
+          case LedRingEnable:
+            myEnc.setLimits(0, 1, true);
+            myEnc.setValue(gaugeSettings.LEDRingEnable);
+            break;
+          case ShiftRPM:
+            myEnc.setLimits(MIN_RPM/RPM_INTERVAL, MAX_RPM/RPM_INTERVAL, true);
+            myEnc.setValue(gaugeSettings.shiftRPM/RPM_INTERVAL);
+            break;
+          case WarningsEnable:
+            myEnc.setLimits(0, 1, true);
+            myEnc.setValue(gaugeSettings.warningsEnable);
+            break;
+          case CoolantWarning:
+            myEnc.setLimits(0, MAX_CLT, true);
+            myEnc.setValue(gaugeSettings.coolantWarning);
+            break;
+          }
+        }
       }
     }
     // Views Menu
@@ -459,17 +491,29 @@ void menu_check()
       {
         if (!menuState.inMenu)
         {
-          menuState.menuPos = 0;
           menuState.inMenu = true;
           myEnc.setLimits(0, NUM_VIEWS - 1, true);
+          myEnc.setValue(menuState.menuPos);
         }
         else
         {
           menuState.inMenu = false;
+          switch (static_cast<ViewsMenu>(menuState.menuPos))
+          {
+          case Dashboard:
+            break;
+          case Single:
+            myEnc.setLimits(0, NUM_GAUGES - 1, true);
+            myEnc.setValue(menuState.gaugeSinglePos);
+            break;
+          case Graph:
+            myEnc.setLimits(0, NUM_GRAPHS - 1, true);
+            myEnc.setValue(menuState.gaugeGraphPos);
+            break;
+          }
         }
       }
     }
-
     buttonPressed = false;
   }
 }
@@ -479,17 +523,13 @@ void display_menu()
   // Check for rotations
   if (myEnc.valueChanged())
   {
-    encLastPos = encoderIndex;
     encoderIndex=myEnc.getValue();
-
-    menuState.menuPos = myEnc.getValue();
+    menuState.menuPos = encoderIndex;
 
     if (DEBUG_MODE)
     {
       Serial.print("Encoder: ");
       Serial.print(encoderIndex);
-      Serial.print(" Last: ");
-      Serial.println(encLastPos);
       Serial.print("Menu: ");
       Serial.println(menuState.menuPos);
     }
@@ -505,70 +545,35 @@ void display_settings()
   // Check for rotations
   if (myEnc.valueChanged())
   {
-    encLastPos = encoderIndex;
     encoderIndex=myEnc.getValue();
-
     if (menuState.settingSelect)
     {
-      if (encoderIndex > encLastPos)
+      switch (static_cast<SettingMenu>(menuState.settingsPos))
       {
-        switch(menuState.settingsPos)
-        {
-        case 0:
-          gaugeSettings.LEDRingEnable = !gaugeSettings.LEDRingEnable;
-          break;
-        case 1:
-          if (gaugeSettings.shiftRPM - RPM_INTERVAL < MAX_RPM) gaugeSettings.shiftRPM += RPM_INTERVAL;
-          break;
-        case 2:
-          gaugeSettings.warningsEnable = !gaugeSettings.warningsEnable;
-          break;
-        case 3:
-          if (gaugeSettings.coolantWarning < MAX_CLT) gaugeSettings.coolantWarning++;
-          break;
-        }
-
-        gaugeSettings.dirty = true;
+      case LedRingEnable:
+        gaugeSettings.LEDRingEnable = encoderIndex;
+        break;
+      case ShiftRPM:
+        gaugeSettings.shiftRPM = encoderIndex * RPM_INTERVAL;
+        break;
+      case WarningsEnable:
+        gaugeSettings.warningsEnable = encoderIndex;
+        break;
+      case CoolantWarning:
+        gaugeSettings.coolantWarning = encoderIndex;
+        break;
       }
-      else if (encoderIndex < encLastPos)
-      {
-        switch(menuState.settingsPos)
-        {
-        case 0:
-          gaugeSettings.LEDRingEnable = !gaugeSettings.LEDRingEnable;
-          break;
-        case 1:
-          if (gaugeSettings.shiftRPM + RPM_INTERVAL > MIN_RPM) gaugeSettings.shiftRPM -= RPM_INTERVAL;
-          break;
-        case 2:
-          gaugeSettings.warningsEnable = !gaugeSettings.warningsEnable;
-          break;
-        case 3:
-          if (gaugeSettings.coolantWarning > 0) gaugeSettings.coolantWarning--;
-          break;
-        }
-
-        gaugeSettings.dirty = true;
-      }      
+      gaugeSettings.dirty = true;      
     }
     else
     {
-      if (encoderIndex > encLastPos && menuState.settingsPos < NUM_SETTINGS - 1)
-      {
-        menuState.settingsPos++;
-      }
-      else if (encoderIndex < encLastPos && menuState.settingsPos > 0)
-      {
-        menuState.settingsPos--;
-      }
+      menuState.settingsPos = encoderIndex;
     }
 
     if (DEBUG_MODE)
     {
       Serial.print("Encoder: ");
       Serial.print(encoderIndex);
-      Serial.print(" Last: ");
-      Serial.println(encLastPos);
       Serial.print("Settings: ");
       Serial.println(menuState.settingsPos);
     }
@@ -601,18 +606,18 @@ void display_settings()
     }
 
     display.setCursor(100, (10 * i) + 2);
-    switch (i)
+    switch (static_cast<SettingMenu>(i))
     {
-    case 0:
+    case LedRingEnable:
       display.print(gaugeSettings.LEDRingEnable ? "On" : "Off");
       break;
-    case 1:
+    case ShiftRPM:
       display.print(gaugeSettings.shiftRPM);
       break;
-    case 2:
+    case WarningsEnable:
       display.print(gaugeSettings.warningsEnable ? "On" : "Off"); 
       break;
-    case 3:
+    case CoolantWarning:
       display.print(gaugeSettings.coolantWarning);
       break;
     }
@@ -959,102 +964,92 @@ void gauge_single()
   // Check for rotations
   if (myEnc.valueChanged())
   {
-    encLastPos = encoderIndex;
     encoderIndex=myEnc.getValue();
-  
-    if (encoderIndex > encLastPos && menuState.gaugeSinglePos < NUM_GAUGES - 1)
-    {
-      menuState.gaugeSinglePos++;
-    }
-    else if (encoderIndex < encLastPos && menuState.gaugeSinglePos > 0)
-    {
-      menuState.gaugeSinglePos--;
-    }
+    menuState.gaugeSinglePos = encoderIndex;
+
     if (DEBUG_MODE)
     {
       Serial.print("Encoder: ");
       Serial.print(encoderIndex);
-      Serial.print(" Last: ");
-      Serial.println(encLastPos);
       Serial.print("Single: ");
       Serial.println(menuState.gaugeSinglePos);
     }
   }
 
-  switch (menuState.gaugeSinglePos)
+  switch (static_cast<Gauges>(menuState.gaugeSinglePos))
   {
-    case 0:
+    case RPM:
       label="RPM";
       itoa(gaugeData.RPM, data, 10);
       break;
-    case 1:
+    case AFR:
       label="AFR";
       divby10(gaugeData.AFR);
       strcpy(data, tempchars);
       break;
-    case 2:
+    case Coolant:
       label="Coolant";
       divby10(gaugeData.CLT);
       strcpy(data, tempchars);
       break;
-    case 3:
+    case MAP:
       label="MAP";
       divby10(gaugeData.MAP);
       strcpy(data, tempchars);
       break;
-    case 4:
+    case MAT:
       label="MAT";
       divby10(gaugeData.MAT);
       strcpy(data, tempchars);
       break;
-    case 5:
+    case Timing:
       label="Timing";
       divby10(gaugeData.SPKADV);
       strcpy(data, tempchars);
       break;
-    case 6:
+    case Voltage:
       label="Voltage";
       divby10(gaugeData.BATTV);
       strcpy(data, tempchars);
       break;
-    case 7:
+    case TPS:
       label="TPS";
       divby10(gaugeData.TPS);
       strcpy(data, tempchars);
       break;
-    case 8:
+    case Knock:
       label="Knock";
       divby10(gaugeData.Knock);
       strcpy(data, tempchars);
       break;
-    case 9:
+    case Barometer:
       label="Barometer";
       divby10(gaugeData.Baro);
       strcpy(data, tempchars);
       break;
-    case 10:
+    case EGOCorrection:
       label="EGO Corr";
       divby10(gaugeData.EGOc);
       strcpy(data, tempchars);
       break;
-    case 11:
+    case IAC:
       label="IAC";
       itoa(gaugeData.IAC, data, 10);
       break;
-    case 12:
+    case SparkDwell:
       label="Spark Dwell";
       divby10(gaugeData.dwell);
       strcpy(data, tempchars);
       break;
-    case 13:
+    case BoostDuty:
       label="Boost Duty";
       itoa(gaugeData.bstduty, data, 10);
       break;
-    case 14:
+    case IdleTarget:
       label="Idle Target";
       itoa(gaugeData.idle_tar, data, 10);
       break;
-    case 15:
+    case AfrTarget:
       label="AFR Target";
       divby10(gaugeData.AFR_tar);
       strcpy(data, tempchars);
@@ -1245,24 +1240,13 @@ void gauge_graph()
   // Check for rotations
   if (myEnc.valueChanged())
   {
-    encLastPos = encoderIndex;
     encoderIndex=myEnc.getValue();
-  
-    if (encoderIndex > encLastPos && menuState.gaugeGraphPos < NUM_GRAPHS - 1)
-    {
-      menuState.gaugeGraphPos++;
-    }
-    else if (encoderIndex < encLastPos && menuState.gaugeGraphPos > 0)
-    {
-      menuState.gaugeGraphPos--;
-    }
+    menuState.gaugeGraphPos = encoderIndex;
 
     if (DEBUG_MODE)
     {
       Serial.print("Encoder: ");
       Serial.print(encoderIndex);
-      Serial.print(" Last: ");
-      Serial.println(encLastPos);
       Serial.print("Graph: ");
       Serial.println(menuState.gaugeGraphPos);
     }
@@ -1273,32 +1257,25 @@ void gauge_graph()
   {
     display.clearDisplay();
 
-    switch (menuState.gaugeGraphPos)
+    switch (static_cast<Graphs>(menuState.gaugeGraphPos))
     {
     // 0-50 value normalization
-    case 0:
+    case AFR:
       val = (gaugeData.AFR - 100) / 2;  // real rough estimation here here of afr on a 0-50 scale
-      if (val > 50)
-      {
-        val = 50;
-      }
       break;
-    case 1:
+    case MAP:
       val = ((gaugeData.MAP/10) - 30) / 4;
-      if (val > 50)
-      {
-        val = 50;
-      }
       break;
-    case 2:
+    case MAT:
       val = (gaugeData.MAT/10) / 4;
-      if (val > 50)
-      {
-        val = 50;
-      }
       break;
     default:
       val = 0;
+    }
+
+    if (val > 50)
+    {
+      val = 50;
     }
 
     histogram_index++;
@@ -1323,9 +1300,9 @@ void gauge_graph()
     display.setTextSize(2);
     display.setTextColor(WHITE);
 
-    switch (menuState.gaugeGraphPos)
+    switch (static_cast<Graphs>(menuState.gaugeGraphPos))
     {
-    case 0:
+    case AFR:
       display.print("AFR ");
       divby10(gaugeData.AFR);
       display.print(tempchars);
@@ -1335,7 +1312,7 @@ void gauge_graph()
         display.drawPixel(x, 40, BLACK);
       }
       break;
-    case 1:
+    case MAP:
       display.print("MAP ");
       display.print(gaugeData.MAP/10);
       display.drawFastHLine(0, 47, 128, WHITE); // Baro line.. roughly 98kpa
@@ -1344,13 +1321,13 @@ void gauge_graph()
         display.drawPixel(x, 47, BLACK);
       }
       break;
-    case 2:
+    case MAT:
       display.print("MAT ");
       display.print(gaugeData.MAT / 10);
       break;
     }
 
-    validity_window=millis();
+    validity_window = millis();
   }
 }
 

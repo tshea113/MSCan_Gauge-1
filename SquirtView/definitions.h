@@ -11,6 +11,6 @@
 #define SCREEN_HEIGHT   64 // OLED display height, in pixels
 
 #define MIN_RPM         5000    // Minimum RPM for shift light setting
-#define MAX_RPM         20000   // Maximum RPM for shift light setting
+#define MAX_RPM         9900    // Maximum RPM for shift light setting
 #define RPM_INTERVAL    100     // Smallest interval for shift light setting
 #define MAX_CLT         300     // Maximum coolant temp for warning

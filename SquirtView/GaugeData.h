@@ -9,6 +9,50 @@ const String SETTINGS[NUM_SETTINGS] = {"LED Ring", "Shift RPM", "Warnings", "Coo
 const String GAUGES[NUM_GAUGES] = {"RPM", "AFR", "Coolant", "MAP", "MAT", "Timing", "Voltage", "TPS", "Knock", "Barometer", "EGO Corr", "IAC", "Spark Dwell", "Boost Duty", "Idle Target", "AFR Target"};
 const String GRAPHS[NUM_GRAPHS] = {"AFR", "MAP", "MAT"};
 
+enum ViewsMenu : uint8_t
+{
+  Dashboard = 0,
+  Single = 1,
+  Graph = 2,
+  Setting = 3
+};
+
+enum SettingMenu : uint8_t
+{
+  LedRingEnable = 0,
+  ShiftRPM = 1,
+  WarningsEnable = 2,
+  CoolantWarning = 3,
+  Exit = 4
+};
+
+enum Gauges : uint8_t
+{
+  RPM = 0,
+  AFR = 1,
+  Coolant = 2,
+  MAP = 3,
+  MAT = 4,
+  Timing = 5,
+  Voltage = 6,
+  TPS = 7,
+  Knock = 8,
+  Barometer = 9,
+  EGOCorrection = 10,
+  IAC = 11,
+  SparkDwell = 12,
+  BoostDuty = 13,
+  IdleTarget = 14,
+  AfrTarget = 15
+};
+
+enum Graphs : uint8_t
+{
+  AFR = 0,
+  MAP = 1,
+  MAT = 2
+};
+
 // EEPROM Addresses
 const uint8_t EEPROM_INIT       = 0;
 const uint8_t RING_ENABLE_ADDR  = 1;
