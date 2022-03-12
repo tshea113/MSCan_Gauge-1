@@ -1,15 +1,15 @@
 // Constants
-const int16_t kNumViews                     = 4;      // Number of gauge views
-const int16_t kNumSettings                  = 5;      // Number of settings
-const int16_t kNumGauges                    = 16;     // Number of gauges
-const int16_t kNumGraphs                    = 3;      // Number of graph gauges
+const int kNumViews                     = 4;      // Number of gauge views
+const int kNumSettings                  = 5;      // Number of settings
+const int kNumGauges                    = 16;     // Number of gauges
+const int kNumGraphs                    = 3;      // Number of graph gauges
 
 const String kViews[kNumViews] = {"Dashboard", "Single", "Graph", "Settings"};
 const String kSettings[kNumSettings] = {"LED Ring", "Shift RPM", "Warnings", "Coolant Warn", "Exit"};
 const String kGauges[kNumGauges] = {"RPM", "AFR", "Coolant", "MAP", "MAT", "Timing", "Voltage", "TPS", "Knock", "Barometer", "EGO Corr", "IAC", "Spark Dwell", "Boost Duty", "Idle Target", "AFR Target"};
 const String kGraphs[kNumGraphs] = {"AFR", "MAP", "MAT"};
 
-enum ViewsMenu : int16_t
+enum ViewsMenu : int
 {
   kDashboardView = 0,
   kSingleView = 1,
@@ -17,7 +17,7 @@ enum ViewsMenu : int16_t
   kSettingView = 3
 };
 
-enum SettingMenu : int16_t
+enum SettingMenu : int
 {
   kLedRingEnableSetting = 0,
   kShiftRPMSetting = 1,
@@ -26,7 +26,7 @@ enum SettingMenu : int16_t
   kExitSetting = 4
 };
 
-enum Gauges : int16_t
+enum Gauges : int
 {
   kRPMGauge = 0,
   kAFRGauge = 1,
@@ -46,7 +46,7 @@ enum Gauges : int16_t
   kAfrTargetGauge = 15
 };
 
-enum Graphs : int16_t
+enum Graphs : int
 {
   kAFRGraph = 0,
   kMAPGraph = 1,
@@ -60,7 +60,7 @@ const uint8_t kShiftRpmAddr       = 2;
 const uint8_t kWarningEnableAddr  = 4;
 const uint8_t kCoolantWarningAddr = 5;
 
-const int16_t kEEPROMValidId = 4;
+const int kEEPROMValidId = 4;
 
 // Data Structures
 struct MenuState
@@ -78,36 +78,36 @@ struct Settings
 {
   bool dirty = false;
   bool LEDRingEnable = true;
-  int16_t shiftRPM = 6800;
+  int shiftRPM = 6800;
   bool warningsEnable = true;
-  int16_t coolantWarning = 240;
+  int coolantWarning = 240;
 };
 
 struct GaugeData
 {
-  int16_t RPM;
-  int16_t CLT;
-  int16_t MAP;
-  int16_t MAT;
-  int16_t SPKADV;
-  int16_t BATTV;
-  int16_t TPS;
-  int16_t Knock;
-  int16_t Baro;
-  int16_t EGOc;
-  int16_t IAC;
-  int16_t dwell;
-  int16_t bstduty;
-  int16_t idle_tar;
-  int16_t AFR;
-  int16_t AFR_tar;
-  int16_t MAP_highest;
-  int16_t RPM_highest;
-  int16_t CLT_highest;
-  int16_t MAT_highest;
-  int16_t Knock_highest;
-  int16_t AFR_highest;
-  int16_t AFR_lowest;
+  int RPM;
+  int CLT;
+  int MAP;
+  int MAT;
+  int SPKADV;
+  int BATTV;
+  int TPS;
+  int Knock;
+  int Baro;
+  int EGOc;
+  int IAC;
+  int dwell;
+  int bstduty;
+  int idle_tar;
+  int AFR;
+  int AFR_tar;
+  int MAP_highest;
+  int RPM_highest;
+  int CLT_highest;
+  int MAT_highest;
+  int Knock_highest;
+  int AFR_highest;
+  int AFR_lowest;
   uint8_t engine;
   uint8_t CEL;
   uint8_t status1;
