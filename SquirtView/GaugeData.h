@@ -60,7 +60,7 @@ const uint8_t kShiftRpmAddr       = 2;
 const uint8_t kWarningEnableAddr  = 4;
 const uint8_t kCoolantWarningAddr = 5;
 
-const uint8_t kEEPROMValidId = 13;
+const uint8_t kEEPROMValidId = 4;
 
 // Data Structures
 struct MenuState

@@ -81,27 +81,37 @@ void setup(void)
   digitalWrite(TEENSY_LED, 1);
 
   // On first run of the gauge, the EEPROM will have garbage values. To fix this,
-  // we check for an identifier in the first address and write default values if it
-  // is not present.
-  if (EEPROM.read(kEEPROMInitAddr) == kEEPROMValidId)
+  // we check that all values are written before starting.
+  if (EEPROM.read(kEEPROMInitAddr) != kEEPROMValidId)
   {
-    gaugeSettings.LEDRingEnable = EEPROM.read(kRingEnableAddr);
-    gaugeSettings.shiftRPM = EEPROM.read((kShiftRpmAddr + 1)) << 8;
-    gaugeSettings.shiftRPM |= EEPROM.read(kShiftRpmAddr);
-    gaugeSettings.warningsEnable = EEPROM.read(kWarningEnableAddr);
-    gaugeSettings.coolantWarning = EEPROM.read((kCoolantWarningAddr + 1)) << 8;
-    gaugeSettings.coolantWarning |= EEPROM.read(kCoolantWarningAddr);
-  }
-  else
-  {
-    EEPROM.write(kRingEnableAddr, gaugeSettings.LEDRingEnable);
-    EEPROM.write(kShiftRpmAddr, gaugeSettings.shiftRPM);
-    EEPROM.write(kShiftRpmAddr + 1, gaugeSettings.shiftRPM >> 8);
-    EEPROM.write(kWarningEnableAddr, gaugeSettings.warningsEnable);
-    EEPROM.write(kCoolantWarningAddr, gaugeSettings.coolantWarning);
-    EEPROM.write(kCoolantWarningAddr + 1, gaugeSettings.coolantWarning >> 8);
+    for(uint8_t numSettings = EEPROM.read(kEEPROMInitAddr); numSettings <= kEEPROMValidId; numSettings++)
+    {
+      switch (numSettings)
+      {
+      default:
+        EEPROM.write(kRingEnableAddr, gaugeSettings.LEDRingEnable);
+        break;
+      case 1:
+        EEPROM.write(kShiftRpmAddr, gaugeSettings.shiftRPM);
+        EEPROM.write(kShiftRpmAddr + 1, gaugeSettings.shiftRPM >> 8);
+        break;
+      case 2:
+        EEPROM.write(kWarningEnableAddr, gaugeSettings.warningsEnable);
+        break;
+      case 3:
+        EEPROM.write(kCoolantWarningAddr, gaugeSettings.coolantWarning);
+        EEPROM.write(kCoolantWarningAddr + 1, gaugeSettings.coolantWarning >> 8);
+      }
+    }
     EEPROM.write(kEEPROMInitAddr, kEEPROMValidId);
   }
+
+  gaugeSettings.LEDRingEnable = EEPROM.read(kRingEnableAddr);
+  gaugeSettings.shiftRPM = EEPROM.read((kShiftRpmAddr + 1)) << 8;
+  gaugeSettings.shiftRPM |= EEPROM.read(kShiftRpmAddr);
+  gaugeSettings.warningsEnable = EEPROM.read(kWarningEnableAddr);
+  gaugeSettings.coolantWarning = EEPROM.read((kCoolantWarningAddr + 1)) << 8;
+  gaugeSettings.coolantWarning |= EEPROM.read(kCoolantWarningAddr);
 
   if (DEBUG_MODE)
   {
