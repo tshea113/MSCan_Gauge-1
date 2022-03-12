@@ -16,7 +16,7 @@
 using namespace EncoderTool;
 
 // FastLED
-CRGB leds[NUM_LEDS];
+CRGB leds[kNumLeds];
 
 // Encoder
 Encoder myEnc;
@@ -35,13 +35,13 @@ volatile unsigned long last_millis;   //switch debouncing
 #endif
 
 // OLED Display I2C
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+Adafruit_SSD1306 display(kOledWidth, kOledHeight, &Wire, OLED_RESET);
 
 // Metro ticks are milliseconds
-Metro commTimer = Metro(CAN_TIMEOUT);
-Metro displayTimer = Metro(DISPLAY_REFRESH);
-Metro ledTimer = Metro(LED_FLASH_TIMER);
-Metro gaugeBlinkTimer = Metro(GAUGE_FLASH_TIMER);
+Metro commTimer = Metro(kCanTimeout);
+Metro displayTimer = Metro(kDisplayRefresh);
+Metro ledTimer = Metro(kLedFlashTimer);
+Metro gaugeBlinkTimer = Metro(kGaugeFlashTimer);
 boolean connectionState = false;
 boolean gaugeBlink = false;
 
@@ -113,7 +113,7 @@ void setup(void)
   gaugeSettings.coolantWarning = EEPROM.read((kCoolantWarningAddr + 1)) << 8;
   gaugeSettings.coolantWarning |= EEPROM.read(kCoolantWarningAddr);
 
-  if (DEBUG_MODE)
+  if (kDebugMode)
   {
     Serial.print("LED Ring Enable: ");
     Serial.println(gaugeSettings.LEDRingEnable);
@@ -126,7 +126,7 @@ void setup(void)
   }
 
   myCan.begin();
-  myCan.setBaudRate(CAN_BAUD);
+  myCan.setBaudRate(kCanBaud);
 
   // Set encoder pins as input with internal pull-up resistors enabled
   pinMode(RBUTTON_INT, INPUT);
@@ -134,19 +134,19 @@ void setup(void)
   attachInterrupt(RBUTTON_INT, DebounceIRQ, FALLING);
 
   // By default, we'll generate the high voltage from the 3.3v line internally! (neat!)
-  display.begin(SSD1306_SWITCHCAPVCC, SCREEN_I2C_ADDR);
+  display.begin(SSD1306_SWITCHCAPVCC, kScreenI2cAddress);
 
   // Show splashscreen
   display.clearDisplay();
   display.drawBitmap(0,0, miata_logo, 128, 64, 1);
   display.display();
 
-  FastLED.addLeds<NEOPIXEL, LEDPIN>(leds, NUM_LEDS);
+  FastLED.addLeds<NEOPIXEL, LEDPIN>(leds, kNumLeds);
 
   // Ring initialization animation
   if (gaugeSettings.LEDRingEnable)
   {
-    for(int i = 0; i < NUM_LEDS; i++)
+    for(int i = 0; i < kNumLeds; i++)
     {
       leds[i].setRGB(16,16,16);
       FastLED.show();
@@ -156,7 +156,7 @@ void setup(void)
     // TODO: Don't like this magic number, maybe have this tied to some brightness variable?
     for (int j = 16; j > -1; j--) 
     {
-      for(int i = 0; i < NUM_LEDS; i++)
+      for(int i = 0; i < kNumLeds; i++)
       {
         leds[i].setRGB(j, j, j);
       }
@@ -187,7 +187,7 @@ void loop(void)
   }
 
   // See if we have gotten any CAN messages in the last second. display an error if not
-  if (commTimer.check() && !DEBUG_MODE)
+  if (commTimer.check() && !kDebugMode)
   {
     display.clearDisplay();
     display.setTextSize(1);
@@ -203,7 +203,7 @@ void loop(void)
   }
 
   // main display routine
-  if ((connectionState && displayTimer.check()) || DEBUG_MODE)
+  if ((connectionState && displayTimer.check()) || kDebugMode)
   {
     MenuCheck();
 
@@ -253,7 +253,7 @@ void loop(void)
   }
 
   // handle received CAN frames
-  if (myCan.read(rxmsg) && !DEBUG_MODE)
+  if (myCan.read(rxmsg) && !kDebugMode)
   {
     commTimer.reset();
     connectionState = true;
@@ -267,7 +267,7 @@ void loop(void)
 void DebounceIRQ ()
 {
   // TODO: Probably shouldn't delay inside of an interrupt
-  if((unsigned long)(millis() - last_millis) >= (DEBOUNCING_TIME * 10))
+  if((unsigned long)(millis() - last_millis) >= (kDebounceTime * 10))
   {
     buttonPressed = true;
 
@@ -353,7 +353,7 @@ void ReadCanMessage()
     {
       rxmsg_id.i = rxmsg.id;
       // is this being sent to us?
-      if (rxmsg_id.values.to_id == myCANid)
+      if (rxmsg_id.values.to_id == kMyCanId)
       {
         switch (rxmsg_id.values.msg_type)
         {
@@ -364,8 +364,8 @@ void ReadCanMessage()
           msg_req_data.bytes.b2 = rxmsg.buf[2];
           // Create the tx packet header
           txmsg_id.values.msg_type = 2; // MSG_RSP
-          txmsg_id.values.to_id = msCANid; // Megasquirt CAN ID should normally be 0
-          txmsg_id.values.from_id = myCANid;
+          txmsg_id.values.to_id = kMsCanId; // Megasquirt CAN ID should normally be 0
+          txmsg_id.values.from_id = kMyCanId;
           txmsg_id.values.block = msg_req_data.values.varblk;
           txmsg_id.values.offset = msg_req_data.values.varoffset;
           txmsg.flags.extended = 1;
@@ -509,7 +509,7 @@ void WriteSettingsToEEPROM()
 {
   if (gaugeSettings.dirty)
   {
-    if (DEBUG_MODE)
+    if (kDebugMode)
     {
       Serial.println("Writing to EEPROM!");
     }
@@ -522,7 +522,7 @@ void WriteSettingsToEEPROM()
     EEPROM.write(kCoolantWarningAddr + 1, gaugeSettings.coolantWarning >> 8);
     gaugeSettings.dirty = false;
 
-    if (DEBUG_MODE)
+    if (kDebugMode)
     {
       Serial.println("Done writing to EEPROM!");
     }
@@ -537,7 +537,7 @@ void MenuView()
     encoderIndex=myEnc.getValue();
     menuState.menuPos = encoderIndex;
 
-    if (DEBUG_MODE)
+    if (kDebugMode)
     {
       Serial.print("Encoder: ");
       Serial.println(encoderIndex);
@@ -583,7 +583,7 @@ void SettingsView()
       menuState.settingsPos = encoderIndex;
     }
 
-    if (DEBUG_MODE)
+    if (kDebugMode)
     {
       Serial.print("Encoder: ");
       Serial.println(encoderIndex);
@@ -982,7 +982,7 @@ void SingleView()
     encoderIndex=myEnc.getValue();
     menuState.gaugeSinglePos = encoderIndex;
 
-    if (DEBUG_MODE)
+    if (kDebugMode)
     {
       Serial.print("Encoder: ");
       Serial.println(encoderIndex);
@@ -1262,7 +1262,7 @@ void GraphView()
     encoderIndex=myEnc.getValue();
     menuState.gaugeGraphPos = encoderIndex;
 
-    if (DEBUG_MODE)
+    if (kDebugMode)
     {
       Serial.print("Encoder: ");
       Serial.println(encoderIndex);
@@ -1381,7 +1381,7 @@ void ShiftLightView()
   {
     if (gaugeData.RPM < gaugeSettings.shiftRPM)
     {
-      uint8_t currLights = (gaugeData.RPM - 4000) / ((gaugeSettings.shiftRPM - 4000) / NUM_LEDS);
+      uint8_t currLights = (gaugeData.RPM - 4000) / ((gaugeSettings.shiftRPM - 4000) / kNumLeds);
 
       for (int i = 0; i < currLights; i++)
       {
@@ -1390,7 +1390,7 @@ void ShiftLightView()
     }
     else
     {
-      for (int i = 0; i < NUM_LEDS; i++)
+      for (int i = 0; i < kNumLeds; i++)
       {
         if (gaugeBlink)
         {
@@ -1406,7 +1406,7 @@ void ShiftLightView()
   }
   else
   {
-    for(int i = 0; i < NUM_LEDS; i++)
+    for(int i = 0; i < kNumLeds; i++)
     {
       leds[i].setRGB(0, 0, 0);
     }
@@ -1416,7 +1416,7 @@ void ShiftLightView()
 
 void WarningLightView()
 {
-  for (int i = 0; i < NUM_LEDS; i++)
+  for (int i = 0; i < kNumLeds; i++)
   {
     if (gaugeBlink)
     {
@@ -1433,7 +1433,7 @@ void WarningLightView()
 
 void NoLightView()
 {
-  for(int i = 0; i < NUM_LEDS; i++)
+  for(int i = 0; i < kNumLeds; i++)
   {
     leds[i].setRGB(0, 0, 0);
   }

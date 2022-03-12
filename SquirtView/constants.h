@@ -1,24 +1,23 @@
 #include <avr/pgmspace.h>
 
 // User configuerable constants
-const int myCANid     = 10;     // CAN ID of this unit
-const int msCANid     = 0;      // CAN ID of the Megasquirt (should almost always be 0)
-const int REVLIMIT    = 6800;   // Soft rev limit at which to start blinking the tach gauge
-const bool DEBUG_MODE = false;  // Debug mode for testing menus, screens, etc.
+const int kMyCanId      = 10;     // CAN ID of this unit
+const int kMsCanId      = 0;      // CAN ID of the Megasquirt (should almost always be 0)
+const bool kDebugMode   = false;  // Debug mode for testing menus, screens, etc.
 
 // Constants
-const int SCREEN_I2C_ADDR               = 0x3D;    // I2C address of the OLED screen
-const int CAN_TIMEOUT                   = 1000;   // Display an error message if no CAN data during this interval
-const int DISPLAY_REFRESH               = 100;    // Refresh the display at this interval
-const int LED_FLASH_TIMER               = 1;      // How long to flash the led upon CAN frame receive/transmit
-const int GAUGE_FLASH_TIMER             = 50;    // Blink the led ring pixels during certain conditions
-const int NUM_LEDS                      = 16;     // Number of LEDs on the NeoPixel ring
-const unsigned long DEBOUNCING_TIME     = 25;    // Debouncing Time - 150 is good, 200 is better, 250 seems worse
-const int OLED_HEIGHT                   = 64;     // Height of the OLED screen in pixels
-const int OLED_WIDTH                    = 128;    // Width of the OLED screen in pixels
-const int CAN_BAUD                      = 500000; // CAN baud rate
-const int MS_DATA_NAME_MAX_LENGTH       = 10;     // Maximum length of MS data field name
-const int MS_DATA_BIN_NAME_MAX_LENGTH   = 14;     // Maximum length of MS data field name
+const int kScreenI2cAddress               = 0x3D;   // I2C address of the OLED screen
+const int kCanTimeout                     = 1000;   // Display an error message if no CAN data during this interval
+const int kDisplayRefresh                 = 100;    // Refresh the display at this interval
+const int kLedFlashTimer                  = 1;      // How long to flash the led upon CAN frame receive/transmit
+const int kGaugeFlashTimer                = 50;     // Blink the led ring pixels during certain conditions
+const int kNumLeds                        = 16;     // Number of LEDs on the NeoPixel ring
+const unsigned long kDebounceTime         = 25;     // Debouncing Time - 150 is good, 200 is better, 250 seems worse
+const int kOledHeight                     = 64;     // Height of the OLED screen in pixels
+const int kOledWidth                      = 128;    // Width of the OLED screen in pixels
+const int kCanBaud                        = 500000; // CAN baud rate
+const int kMsDataNameMaxLength            = 10;     // Maximum length of MS data field name
+const int kMsDataBinNameMaxLength         = 14;     // Maximum length of MS data field name
 
 // Program memory constants
 const unsigned char miata_logo [] PROGMEM = 
@@ -91,7 +90,7 @@ const unsigned char miata_logo [] PROGMEM =
 
 struct MSDataObject
 {
-  char name[MS_DATA_NAME_MAX_LENGTH];
+  char name[kMsDataNameMaxLength];
   byte block;                         // max val 32?
   unsigned int offset;                // max val?
   byte reqbytes;                      // max val 8
@@ -121,7 +120,7 @@ const MSDataObject MSData[] PROGMEM =
 
 struct MSDataBinaryObject 
 {
-  char name[MS_DATA_BIN_NAME_MAX_LENGTH];
+  char name[kMsDataBinNameMaxLength];
   byte sbyte;
   byte bitp;
 };
