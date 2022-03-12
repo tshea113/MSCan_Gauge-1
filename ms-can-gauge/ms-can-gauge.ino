@@ -8,10 +8,10 @@
 #include <EncoderTool.h>
 #include <EEPROM.h>
 
-#include "MegasquirtMessages.h"
-#include "PinDefinitions.h"
-#include "Constants.h"
-#include "GaugeData.h"
+#include "megasquirt-messages.h"
+#include "pin-definitions.h"
+#include "constants.h"
+#include "gauge-data.h"
 
 using namespace EncoderTool;
 
