@@ -7,7 +7,7 @@ const int REVLIMIT    = 6800;   // Soft rev limit at which to start blinking the
 const bool DEBUG_MODE = false;  // Debug mode for testing menus, screens, etc.
 
 // Constants
-const int SCREEN_I2C_ADDR               = 0x3D    // I2C address of the OLED screen
+const int SCREEN_I2C_ADDR               = 0x3D;    // I2C address of the OLED screen
 const int CAN_TIMEOUT                   = 1000;   // Display an error message if no CAN data during this interval
 const int DISPLAY_REFRESH               = 100;    // Refresh the display at this interval
 const int LED_FLASH_TIMER               = 1;      // How long to flash the led upon CAN frame receive/transmit
