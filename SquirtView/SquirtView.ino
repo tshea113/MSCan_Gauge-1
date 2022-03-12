@@ -5,22 +5,22 @@
 #include <Adafruit_SSD1306.h>
 #include <TimeLib.h>
 #include <FastLED.h>
-#include <Encoder.h>
+#include <EncoderTool.h>
 #include <EEPROM.h>
 
-#include "RotKnob.h"
 #include "MegasquirtMessages.h"
 #include "definitions.h"
 #include "constants.h"
 #include "GaugeData.h"
 
+using namespace EncoderTool;
+
 // FastLED
 CRGB leds[NUM_LEDS];
 
 // Encoder
-rotKnob<ENC_PIN_1, ENC_PIN_2> myEnc;
+Encoder myEnc;
 int16_t encoderIndex;
-int16_t encLastPos;
 bool buttonPressed;
 volatile unsigned long last_millis;   //switch debouncing
 
@@ -68,7 +68,7 @@ byte histogram[64]; // 512 memory usage
 byte histogram_index;
 
 // -------------------------------------------------------------
-static void ledBlink()
+static void LedBlink()
 {
   ledTimer.reset();
   digitalWrite(TEENSY_LED, 1);
@@ -83,24 +83,36 @@ void setup(void)
   // On first run of the gauge, the EEPROM will have garbage values. To fix this,
   // we check for an identifier in the first address and write default values if it
   // is not present.
-  if (EEPROM.read(EEPROM_INIT) == EEPROM_VALID)
+  if (EEPROM.read(kEEPROMInitAddr) == kEEPROMValidId)
   {
-    gaugeSettings.LEDRingEnable = EEPROM.read(RING_ENABLE_ADDR);
-    gaugeSettings.shiftRPM = EEPROM.read((SHIFT_RPM_ADDR + 1)) << 8;
-    gaugeSettings.shiftRPM |= EEPROM.read(SHIFT_RPM_ADDR);
-    gaugeSettings.warningsEnable = EEPROM.read(WARN_ENABLE_ADDR);
-    gaugeSettings.coolantWarning = EEPROM.read((CLT_WARN_ADDR + 1)) << 8;
-    gaugeSettings.coolantWarning |= EEPROM.read(CLT_WARN_ADDR);
+    gaugeSettings.LEDRingEnable = EEPROM.read(kRingEnableAddr);
+    gaugeSettings.shiftRPM = EEPROM.read((kShiftRpmAddr + 1)) << 8;
+    gaugeSettings.shiftRPM |= EEPROM.read(kShiftRpmAddr);
+    gaugeSettings.warningsEnable = EEPROM.read(kWarningEnableAddr);
+    gaugeSettings.coolantWarning = EEPROM.read((kCoolantWarningAddr + 1)) << 8;
+    gaugeSettings.coolantWarning |= EEPROM.read(kCoolantWarningAddr);
   }
   else
   {
-    EEPROM.write(RING_ENABLE_ADDR, gaugeSettings.LEDRingEnable);
-    EEPROM.write(SHIFT_RPM_ADDR, gaugeSettings.shiftRPM);
-    EEPROM.write(SHIFT_RPM_ADDR + 1, gaugeSettings.shiftRPM >> 8);
-    EEPROM.write(WARN_ENABLE_ADDR, gaugeSettings.warningsEnable);
-    EEPROM.write(CLT_WARN_ADDR, gaugeSettings.coolantWarning);
-    EEPROM.write(CLT_WARN_ADDR + 1, gaugeSettings.coolantWarning >> 8);
-    EEPROM.write(EEPROM_INIT, EEPROM_VALID);
+    EEPROM.write(kRingEnableAddr, gaugeSettings.LEDRingEnable);
+    EEPROM.write(kShiftRpmAddr, gaugeSettings.shiftRPM);
+    EEPROM.write(kShiftRpmAddr + 1, gaugeSettings.shiftRPM >> 8);
+    EEPROM.write(kWarningEnableAddr, gaugeSettings.warningsEnable);
+    EEPROM.write(kCoolantWarningAddr, gaugeSettings.coolantWarning);
+    EEPROM.write(kCoolantWarningAddr + 1, gaugeSettings.coolantWarning >> 8);
+    EEPROM.write(kEEPROMInitAddr, kEEPROMValidId);
+  }
+
+  if (DEBUG_MODE)
+  {
+    Serial.print("LED Ring Enable: ");
+    Serial.println(gaugeSettings.LEDRingEnable);
+    Serial.print("Shift RPM: ");
+    Serial.println(gaugeSettings.shiftRPM);
+    Serial.print("Warnings Enable: ");
+    Serial.println(gaugeSettings.warningsEnable);
+    Serial.print("Coolant Warning: ");
+    Serial.println(gaugeSettings.coolantWarning);
   }
 
   myCan.begin();
@@ -109,10 +121,10 @@ void setup(void)
   // Set encoder pins as input with internal pull-up resistors enabled
   pinMode(RBUTTON_INT, INPUT);
   digitalWrite(RBUTTON_INT, HIGH);
-  attachInterrupt(RBUTTON_INT, ISR_debounce, FALLING);
+  attachInterrupt(RBUTTON_INT, DebounceIRQ, FALLING);
 
   // By default, we'll generate the high voltage from the 3.3v line internally! (neat!)
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
+  display.begin(SSD1306_SWITCHCAPVCC, SCREEN_I2C_ADDR);
 
   // Show splashscreen
   display.clearDisplay();
@@ -120,7 +132,7 @@ void setup(void)
   display.display();
 
   FastLED.addLeds<NEOPIXEL, LEDPIN>(leds, NUM_LEDS);
-  
+
   // Ring initialization animation
   if (gaugeSettings.LEDRingEnable)
   {
@@ -143,9 +155,7 @@ void setup(void)
     }
   }
 
-  // Encoder has values from -32,768 to 32,767 starting at 0
-  myEnc.begin();
-  encLastPos = myEnc.read();
+  myEnc.begin(ENC_PIN_1, ENC_PIN_2);
   buttonPressed = false;
 
   delay(1000);
@@ -177,7 +187,7 @@ void loop(void)
     display.setCursor(0,0);
     display.display();
 
-    no_light();
+    NoLightView();
     commTimer.reset();
     connectionState = false;
   }
@@ -185,39 +195,43 @@ void loop(void)
   // main display routine
   if ((connectionState && displayTimer.check()) || DEBUG_MODE)
   {
-    menu_check();
+    MenuCheck();
 
     if (gaugeSettings.LEDRingEnable)
     {
-      shift_light();
+      ShiftLightView();
     }
     else
     {
-      no_light();
+      NoLightView();
     }
 
     if (menuState.inMenu)
     {
-      menuState.inSettings ? display_settings() : display_menu();
+      MenuView();
+    }
+    else if (menuState.inSettings)
+    {
+      SettingsView();
     }
     else
     {
-      if (value_oob() && gaugeSettings.warningsEnable)
+      if (IsOutOfBounds() && gaugeSettings.warningsEnable)
       {
-        gauge_warning();
+        WarningView();
       }
       else
       {
-        switch (menuState.menuPos)
+        switch (static_cast<ViewsMenu>(menuState.menuPos))
         {
-        case 0:
-          gauge_dashboard();
+        case kDashboardView:
+          DashboardView();
           break;
-        case 1:
-          gauge_single();
+        case kSingleView:
+          SingleView();
           break;
-        case 2:
-          gauge_graph();
+        case kGraphView:
+          GraphView();
           break;
         default:
           Serial.println("Invalid view!");
@@ -233,21 +247,23 @@ void loop(void)
   {
     commTimer.reset();
     connectionState = true;
-    ledBlink();
+    LedBlink();
 
-    read_CAN_message();
+    ReadCanMessage();
   }
 }
 
 // interrupt handler for the encoder button
-void ISR_debounce ()
+void DebounceIRQ ()
 {
+  // TODO: Probably shouldn't delay inside of an interrupt
   if((unsigned long)(millis() - last_millis) >= (DEBOUNCING_TIME * 10))
   {
     buttonPressed = true;
+
+    // Return to a safe state after button press
     encoderIndex = 0;
-    encLastPos = 0;
-    myEnc.write(0);
+    myEnc.setValue(0);
   }
   else
   {
@@ -257,7 +273,7 @@ void ISR_debounce ()
   last_millis = millis();
 }
 
-void divby10(int val)
+void DivideBy10(int val)
 {
   byte length;
 
@@ -269,7 +285,7 @@ void divby10(int val)
   tempchars[length - 1]='.';
 }
 
-void read_CAN_message()
+void ReadCanMessage()
 {
   // ID's 1520+ are Megasquirt CAN broadcast frames
   switch (rxmsg.id)
@@ -387,7 +403,7 @@ void read_CAN_message()
   }
 }
 
-boolean value_oob()
+boolean IsOutOfBounds()
 {
   if (gaugeData.RPM > 100)
   {
@@ -398,161 +414,169 @@ boolean value_oob()
   return false;
 }
 
-void menu_check()
+void MenuCheck()
 {
   // Pressing the button brings up the menu or selects position
   if (buttonPressed)
   {
+    // Settings Menu
     if (menuState.inSettings)
     {
-      // Exit is always the last item
-      if (menuState.settingsPos == NUM_SETTINGS - 1)
+      if (menuState.settingSelect)
       {
-        menuState.settingsPos = 0;
-        menuState.menuPos = 0;
-        menuState.inSettings = false;
-
-        if (gaugeSettings.dirty)
+        menuState.settingSelect = false;
+        myEnc.setLimits(0, kNumSettings - 1, true);
+        myEnc.setValue(menuState.settingsPos);
+      }
+      else
+      {
+        menuState.settingSelect = true;
+        switch (static_cast<SettingMenu>(menuState.settingsPos))
         {
-          if (DEBUG_MODE)
-          {
-            Serial.println("Writing to EEPROM!");
-          }
-
-          EEPROM.write(RING_ENABLE_ADDR, gaugeSettings.LEDRingEnable);
-          EEPROM.write(SHIFT_RPM_ADDR, gaugeSettings.shiftRPM);
-          EEPROM.write(SHIFT_RPM_ADDR + 1, gaugeSettings.shiftRPM >> 8);
-          EEPROM.write(WARN_ENABLE_ADDR, gaugeSettings.warningsEnable);
-          EEPROM.write(CLT_WARN_ADDR, gaugeSettings.coolantWarning);
-          EEPROM.write(CLT_WARN_ADDR + 1, gaugeSettings.coolantWarning >> 8);
-          gaugeSettings.dirty = false;
+        case kLedRingEnableSetting:
+          myEnc.setLimits(0, 1, true);
+          myEnc.setValue(gaugeSettings.LEDRingEnable);
+          break;
+        case kShiftRPMSetting:
+          myEnc.setLimits(MIN_RPM/RPM_INTERVAL, MAX_RPM/RPM_INTERVAL, true);
+          myEnc.setValue(gaugeSettings.shiftRPM/RPM_INTERVAL);
+          break;
+        case kWarningsEnableSetting:
+          myEnc.setLimits(0, 1, true);
+          myEnc.setValue(gaugeSettings.warningsEnable);
+          break;
+        case kCoolantWarningSetting:
+          myEnc.setLimits(0, MAX_CLT, true);
+          myEnc.setValue(gaugeSettings.coolantWarning);
+          break;
+        case kExitSetting:
+          menuState.settingsPos = 0;
+          menuState.inSettings = false;
+          menuState.inMenu = true;
+          myEnc.setLimits(0, kNumViews - 1, true);
+          myEnc.setValue(menuState.menuPos);
+          WriteSettingsToEEPROM();
+          break;
+        }
+      }
+    }
+    // Views Menu
+    else
+    {
+      if (menuState.inMenu)
+      {
+        menuState.inMenu = false;
+        switch (static_cast<ViewsMenu>(menuState.menuPos))
+        {
+        case kDashboardView:
+          break;
+        case kSingleView:
+          myEnc.setLimits(0, kNumGauges - 1, true);
+          myEnc.setValue(menuState.gaugeSinglePos);
+          break;
+        case kGraphView:
+          myEnc.setLimits(0, kNumGraphs - 1, true);
+          myEnc.setValue(menuState.gaugeGraphPos);
+          break;
+        case kSettingView:
+          menuState.inSettings = true;
+          myEnc.setLimits(0, kNumSettings - 1, true);
+          break;
         }
       }
       else
       {
-        menuState.settingSelect = !menuState.settingSelect;
+        menuState.inMenu = true;
+        myEnc.setLimits(0, kNumViews - 1, true);
+        myEnc.setValue(menuState.menuPos);
       }
     }
-    else
-    {
-      // Settings is always the last item
-      if (menuState.menuPos == NUM_VIEWS - 1)
-      {
-        menuState.inSettings = true;
-      }
-      else
-      {
-        if (!menuState.inMenu) menuState.menuPos = 0;
-        menuState.inMenu = !menuState.inMenu;
-      }
-    }
-
     buttonPressed = false;
   }
 }
 
-void display_menu()
+void WriteSettingsToEEPROM()
+{
+  if (gaugeSettings.dirty)
+  {
+    if (DEBUG_MODE)
+    {
+      Serial.println("Writing to EEPROM!");
+    }
+
+    EEPROM.write(kRingEnableAddr, gaugeSettings.LEDRingEnable);
+    EEPROM.write(kShiftRpmAddr, gaugeSettings.shiftRPM);
+    EEPROM.write(kShiftRpmAddr + 1, gaugeSettings.shiftRPM >> 8);
+    EEPROM.write(kWarningEnableAddr, gaugeSettings.warningsEnable);
+    EEPROM.write(kCoolantWarningAddr, gaugeSettings.coolantWarning);
+    EEPROM.write(kCoolantWarningAddr + 1, gaugeSettings.coolantWarning >> 8);
+    gaugeSettings.dirty = false;
+
+    if (DEBUG_MODE)
+    {
+      Serial.println("Done writing to EEPROM!");
+    }
+  }
+}
+
+void MenuView()
 {
   // Check for rotations
-  if (myEnc.available())
+  if (myEnc.valueChanged())
   {
-    encLastPos = encoderIndex;
-    encoderIndex=myEnc.read();
-
-    if (encoderIndex > encLastPos && menuState.menuPos < NUM_VIEWS - 1)
-    {
-      menuState.menuPos++;
-    }
-    else if (encoderIndex < encLastPos && menuState.menuPos > 0)
-    {
-      menuState.menuPos--;
-    }
+    encoderIndex=myEnc.getValue();
+    menuState.menuPos = encoderIndex;
 
     if (DEBUG_MODE)
     {
       Serial.print("Encoder: ");
-      Serial.print(encoderIndex);
-      Serial.print(" Last: ");
-      Serial.println(encLastPos);
+      Serial.println(encoderIndex);
       Serial.print("Menu: ");
       Serial.println(menuState.menuPos);
     }
   }
 
   display.clearDisplay();
-  print_menu(VIEWS, NUM_VIEWS, menuState.menuPos);
+  PrintMenu(kViews, kNumViews, menuState.menuPos);
   display.display();
 }
 
-void display_settings()
+void SettingsView()
 {
   // Check for rotations
-  if (myEnc.available())
+  if (myEnc.valueChanged())
   {
-    encLastPos = encoderIndex;
-    encoderIndex=myEnc.read();
-
+    encoderIndex=myEnc.getValue();
     if (menuState.settingSelect)
     {
-      if (encoderIndex > encLastPos)
+      switch (static_cast<SettingMenu>(menuState.settingsPos))
       {
-        switch(menuState.settingsPos)
-        {
-        case 0:
-          gaugeSettings.LEDRingEnable = !gaugeSettings.LEDRingEnable;
-          break;
-        case 1:
-          if (gaugeSettings.shiftRPM - RPM_INTERVAL < MAX_RPM) gaugeSettings.shiftRPM += RPM_INTERVAL;
-          break;
-        case 2:
-          gaugeSettings.warningsEnable = !gaugeSettings.warningsEnable;
-          break;
-        case 3:
-          if (gaugeSettings.coolantWarning < MAX_CLT) gaugeSettings.coolantWarning++;
-          break;
-        }
-
-        gaugeSettings.dirty = true;
+      case kLedRingEnableSetting:
+        gaugeSettings.LEDRingEnable = encoderIndex;
+        break;
+      case kShiftRPMSetting:
+        gaugeSettings.shiftRPM = encoderIndex * RPM_INTERVAL;
+        break;
+      case kWarningsEnableSetting:
+        gaugeSettings.warningsEnable = encoderIndex;
+        break;
+      case kCoolantWarningSetting:
+        gaugeSettings.coolantWarning = encoderIndex;
+        break;
+      case kExitSetting:
+        break;
       }
-      else if (encoderIndex < encLastPos)
-      {
-        switch(menuState.settingsPos)
-        {
-        case 0:
-          gaugeSettings.LEDRingEnable = !gaugeSettings.LEDRingEnable;
-          break;
-        case 1:
-          if (gaugeSettings.shiftRPM + RPM_INTERVAL > MIN_RPM) gaugeSettings.shiftRPM -= RPM_INTERVAL;
-          break;
-        case 2:
-          gaugeSettings.warningsEnable = !gaugeSettings.warningsEnable;
-          break;
-        case 3:
-          if (gaugeSettings.coolantWarning > 0) gaugeSettings.coolantWarning--;
-          break;
-        }
-
-        gaugeSettings.dirty = true;
-      }      
+      gaugeSettings.dirty = true;      
     }
     else
     {
-      if (encoderIndex > encLastPos && menuState.settingsPos < NUM_SETTINGS - 1)
-      {
-        menuState.settingsPos++;
-      }
-      else if (encoderIndex < encLastPos && menuState.settingsPos > 0)
-      {
-        menuState.settingsPos--;
-      }
+      menuState.settingsPos = encoderIndex;
     }
 
     if (DEBUG_MODE)
     {
       Serial.print("Encoder: ");
-      Serial.print(encoderIndex);
-      Serial.print(" Last: ");
-      Serial.println(encLastPos);
+      Serial.println(encoderIndex);
       Serial.print("Settings: ");
       Serial.println(menuState.settingsPos);
     }
@@ -561,7 +585,7 @@ void display_settings()
   display.clearDisplay();
 
   display.setTextSize(1);
-  for (int i = 0; i < NUM_SETTINGS; i++)
+  for (int i = 0; i < kNumSettings; i++)
   {
     if (menuState.settingsPos == i && !menuState.settingSelect)
     {
@@ -573,7 +597,7 @@ void display_settings()
     }
 
     display.setCursor(2, (10 * i) + 2);
-    display.print(SETTINGS[i]);
+    display.print(kSettings[i]);
 
     if (menuState.settingsPos == i && menuState.settingSelect)
     {
@@ -585,19 +609,21 @@ void display_settings()
     }
 
     display.setCursor(100, (10 * i) + 2);
-    switch (i)
+    switch (static_cast<SettingMenu>(i))
     {
-    case 0:
+    case kLedRingEnableSetting:
       display.print(gaugeSettings.LEDRingEnable ? "On" : "Off");
       break;
-    case 1:
+    case kShiftRPMSetting:
       display.print(gaugeSettings.shiftRPM);
       break;
-    case 2:
+    case kWarningsEnableSetting:
       display.print(gaugeSettings.warningsEnable ? "On" : "Off"); 
       break;
-    case 3:
+    case kCoolantWarningSetting:
       display.print(gaugeSettings.coolantWarning);
+      break;
+    case kExitSetting:
       break;
     }
   }
@@ -605,7 +631,7 @@ void display_settings()
   display.display();
 }
 
-void gauge_warning()
+void WarningView()
 {
   byte dlength;
   int midpos;
@@ -740,11 +766,11 @@ void gauge_warning()
 
   // if ( bitRead(gaugeData.status2,6) == 1)
   // {
-  //   gauge_danger();
+  //   DangerView();
   // }
 }
 
-void gauge_dashboard()
+void DashboardView()
 {
   //hard coded for style
   // fonts are 5x7 * textsize
@@ -769,7 +795,7 @@ void gauge_dashboard()
   display.print("AFR");
   display.setCursor(20, 19);
   display.setTextSize(2);
-  divby10(gaugeData.AFR);
+  DivideBy10(gaugeData.AFR);
   display.print(tempchars);
 
   display.setCursor(72, 25);
@@ -808,7 +834,7 @@ void gauge_dashboard()
     // 6.895kpa = 1psi
     psi = gaugeData.MAP - gaugeData.Baro;
     psi=(psi * 200) / 1379;
-    divby10(psi);
+    DivideBy10(psi);
     display.print(tempchars);
 
     display.setCursor(72, 40);
@@ -828,10 +854,10 @@ void gauge_dashboard()
     display.print(gaugeData.MAT/10);
   }
 
-  gauge_bottom();
+  BottomView();
 }
 
-void gauge_bottom()
+void BottomView()
 {
   display.setTextSize(1);
   display.drawFastHLine(1, (63 - 7), 126, WHITE);
@@ -933,7 +959,7 @@ void gauge_bottom()
   display.display();
 }
 
-void gauge_single()
+void SingleView()
 {
   char data[10];
   String label;
@@ -941,106 +967,96 @@ void gauge_single()
   display.clearDisplay();
 
   // Check for rotations
-  if (myEnc.available())
+  if (myEnc.valueChanged())
   {
-    encLastPos = encoderIndex;
-    encoderIndex=myEnc.read();
-  
-    if (encoderIndex > encLastPos && menuState.gaugeSinglePos < NUM_GAUGES - 1)
-    {
-      menuState.gaugeSinglePos++;
-    }
-    else if (encoderIndex < encLastPos && menuState.gaugeSinglePos > 0)
-    {
-      menuState.gaugeSinglePos--;
-    }
+    encoderIndex=myEnc.getValue();
+    menuState.gaugeSinglePos = encoderIndex;
+
     if (DEBUG_MODE)
     {
       Serial.print("Encoder: ");
-      Serial.print(encoderIndex);
-      Serial.print(" Last: ");
-      Serial.println(encLastPos);
+      Serial.println(encoderIndex);
       Serial.print("Single: ");
       Serial.println(menuState.gaugeSinglePos);
     }
   }
 
-  switch (menuState.gaugeSinglePos)
+  switch (static_cast<Gauges>(menuState.gaugeSinglePos))
   {
-    case 0:
+    case kRPMGauge:
       label="RPM";
       itoa(gaugeData.RPM, data, 10);
       break;
-    case 1:
+    case kAFRGauge:
       label="AFR";
-      divby10(gaugeData.AFR);
+      DivideBy10(gaugeData.AFR);
       strcpy(data, tempchars);
       break;
-    case 2:
+    case kCoolantGauge:
       label="Coolant";
-      divby10(gaugeData.CLT);
+      DivideBy10(gaugeData.CLT);
       strcpy(data, tempchars);
       break;
-    case 3:
+    case kMAPGauge:
       label="MAP";
-      divby10(gaugeData.MAP);
+      DivideBy10(gaugeData.MAP);
       strcpy(data, tempchars);
       break;
-    case 4:
+    case kMATGauge:
       label="MAT";
-      divby10(gaugeData.MAT);
+      DivideBy10(gaugeData.MAT);
       strcpy(data, tempchars);
       break;
-    case 5:
+    case kTimingGauge:
       label="Timing";
-      divby10(gaugeData.SPKADV);
+      DivideBy10(gaugeData.SPKADV);
       strcpy(data, tempchars);
       break;
-    case 6:
+    case kVoltageGauge:
       label="Voltage";
-      divby10(gaugeData.BATTV);
+      DivideBy10(gaugeData.BATTV);
       strcpy(data, tempchars);
       break;
-    case 7:
+    case kTPSGauge:
       label="TPS";
-      divby10(gaugeData.TPS);
+      DivideBy10(gaugeData.TPS);
       strcpy(data, tempchars);
       break;
-    case 8:
+    case kKnockGauge:
       label="Knock";
-      divby10(gaugeData.Knock);
+      DivideBy10(gaugeData.Knock);
       strcpy(data, tempchars);
       break;
-    case 9:
+    case kBarometerGauge:
       label="Barometer";
-      divby10(gaugeData.Baro);
+      DivideBy10(gaugeData.Baro);
       strcpy(data, tempchars);
       break;
-    case 10:
+    case kEGOCorrectionGauge:
       label="EGO Corr";
-      divby10(gaugeData.EGOc);
+      DivideBy10(gaugeData.EGOc);
       strcpy(data, tempchars);
       break;
-    case 11:
+    case kIACGauge:
       label="IAC";
       itoa(gaugeData.IAC, data, 10);
       break;
-    case 12:
+    case kSparkDwellGauge:
       label="Spark Dwell";
-      divby10(gaugeData.dwell);
+      DivideBy10(gaugeData.dwell);
       strcpy(data, tempchars);
       break;
-    case 13:
+    case kBoostDutyGauge:
       label="Boost Duty";
       itoa(gaugeData.bstduty, data, 10);
       break;
-    case 14:
+    case kIdleTargetGauge:
       label="Idle Target";
       itoa(gaugeData.idle_tar, data, 10);
       break;
-    case 15:
+    case kAfrTargetGauge:
       label="AFR Target";
-      divby10(gaugeData.AFR_tar);
+      DivideBy10(gaugeData.AFR_tar);
       strcpy(data, tempchars);
       break;
   }
@@ -1092,6 +1108,10 @@ void gauge_single()
   display.setCursor(8, (63 - 15));
   display.print(label);
 
+  display.setCursor(0, 0);
+  display.setTextSize(1);
+  display.print(menuState.gaugeSinglePos + 1);
+
   //Additional data for highest/lowest value
   if (menuState.gaugeSinglePos == 0)
   {
@@ -1137,10 +1157,10 @@ void gauge_single()
     }
     display.setTextSize(2);
     display.setCursor(0, 31);
-    divby10(gaugeData.AFR_lowest);
+    DivideBy10(gaugeData.AFR_lowest);
     display.print(tempchars);
     display.setCursor((127 - 48), 31);
-    divby10(gaugeData.AFR_highest);
+    DivideBy10(gaugeData.AFR_highest);
     display.print(tempchars);
   }
 
@@ -1159,7 +1179,7 @@ void gauge_single()
     }
     display.setTextSize(2);
     display.setCursor((127 - 60), 31);
-    divby10(gaugeData.CLT_highest);
+    DivideBy10(gaugeData.CLT_highest);
     display.print(tempchars);
   }
 
@@ -1178,7 +1198,7 @@ void gauge_single()
     }
     display.setTextSize(2);
     display.setCursor((127 - 48), 31);
-    divby10(gaugeData.MAP_highest);
+    DivideBy10(gaugeData.MAP_highest);
     display.print(tempchars);
   }
 
@@ -1197,7 +1217,7 @@ void gauge_single()
     }
     display.setTextSize(2);
     display.setCursor((127 - 48), 31);
-    divby10(gaugeData.MAT_highest);
+    DivideBy10(gaugeData.MAT_highest);
     display.print(tempchars);
   }
 
@@ -1216,37 +1236,26 @@ void gauge_single()
     }
     display.setTextSize(2);
     display.setCursor((127 - 48), 31);
-    divby10(gaugeData.Knock_highest);
+    DivideBy10(gaugeData.Knock_highest);
     display.print(tempchars);
   }
   display.display();
 }
 
-void gauge_graph()
+void GraphView()
 {
   byte val;
   
   // Check for rotations
-  if (myEnc.available())
+  if (myEnc.valueChanged())
   {
-    encLastPos = encoderIndex;
-    encoderIndex=myEnc.read();
-  
-    if (encoderIndex > encLastPos && menuState.gaugeGraphPos < NUM_GRAPHS - 1)
-    {
-      menuState.gaugeGraphPos++;
-    }
-    else if (encoderIndex < encLastPos && menuState.gaugeGraphPos > 0)
-    {
-      menuState.gaugeGraphPos--;
-    }
+    encoderIndex=myEnc.getValue();
+    menuState.gaugeGraphPos = encoderIndex;
 
     if (DEBUG_MODE)
     {
       Serial.print("Encoder: ");
-      Serial.print(encoderIndex);
-      Serial.print(" Last: ");
-      Serial.println(encLastPos);
+      Serial.println(encoderIndex);
       Serial.print("Graph: ");
       Serial.println(menuState.gaugeGraphPos);
     }
@@ -1257,32 +1266,25 @@ void gauge_graph()
   {
     display.clearDisplay();
 
-    switch (menuState.gaugeGraphPos)
+    switch (static_cast<Graphs>(menuState.gaugeGraphPos))
     {
     // 0-50 value normalization
-    case 0:
+    case kAFRGraph:
       val = (gaugeData.AFR - 100) / 2;  // real rough estimation here here of afr on a 0-50 scale
-      if (val > 50)
-      {
-        val = 50;
-      }
       break;
-    case 1:
+    case kMAPGraph:
       val = ((gaugeData.MAP/10) - 30) / 4;
-      if (val > 50)
-      {
-        val = 50;
-      }
       break;
-    case 2:
+    case kMATGraph:
       val = (gaugeData.MAT/10) / 4;
-      if (val > 50)
-      {
-        val = 50;
-      }
       break;
     default:
       val = 0;
+    }
+
+    if (val > 50)
+    {
+      val = 50;
     }
 
     histogram_index++;
@@ -1303,15 +1305,15 @@ void gauge_graph()
       display.drawFastVLine((127 - (i * 2)), (64 - histogram[x]), 64, WHITE);
     }
 
-    display.setCursor(8,0);
+    display.setCursor(20,0);
     display.setTextSize(2);
     display.setTextColor(WHITE);
 
-    switch (menuState.gaugeGraphPos)
+    switch (static_cast<Graphs>(menuState.gaugeGraphPos))
     {
-    case 0:
+    case kAFRGraph:
       display.print("AFR ");
-      divby10(gaugeData.AFR);
+      DivideBy10(gaugeData.AFR);
       display.print(tempchars);
       display.drawFastHLine(0, 40, 128, WHITE); // stoich 14.7 line
       for (byte x=1; x < 128; x = x + 2)
@@ -1319,7 +1321,7 @@ void gauge_graph()
         display.drawPixel(x, 40, BLACK);
       }
       break;
-    case 1:
+    case kMAPGraph:
       display.print("MAP ");
       display.print(gaugeData.MAP/10);
       display.drawFastHLine(0, 47, 128, WHITE); // Baro line.. roughly 98kpa
@@ -1328,17 +1330,21 @@ void gauge_graph()
         display.drawPixel(x, 47, BLACK);
       }
       break;
-    case 2:
+    case kMATGraph:
       display.print("MAT ");
       display.print(gaugeData.MAT / 10);
       break;
     }
 
-    validity_window=millis();
+    display.setCursor(0, 0);
+    display.setTextSize(1);
+    display.print(menuState.gaugeGraphPos + 1);
+
+    validity_window = millis();
   }
 }
 
-void gauge_danger()
+void DangerView()
 {
   display.setTextSize(2);
   display.setTextColor(WHITE);
@@ -1359,7 +1365,7 @@ void gauge_danger()
   display.display();
 }
 
-void shift_light()
+void ShiftLightView()
 {
   if (gaugeData.RPM > 4000)
   {
@@ -1398,7 +1404,7 @@ void shift_light()
   FastLED.show();
 }
 
-void warning_light()
+void WarningLightView()
 {
   for (int i = 0; i < NUM_LEDS; i++)
   {
@@ -1415,7 +1421,7 @@ void warning_light()
   FastLED.show();
 }
 
-void no_light()
+void NoLightView()
 {
   for(int i = 0; i < NUM_LEDS; i++)
   {
@@ -1424,7 +1430,7 @@ void no_light()
   FastLED.show();
 }
 
-void print_menu(const String items[], int numItems, int currPos)
+void PrintMenu(const String items[], int numItems, int currPos)
 {
   display.setTextSize(1);
   for (int i = 0; i < numItems; i++)
