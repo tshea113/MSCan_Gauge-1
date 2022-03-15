@@ -6,7 +6,7 @@ const int kNumGraphs                    = 3;      // Number of graph gauges
 
 const String kViews[kNumViews] = {"Dashboard", "Single", "Graph", "Settings"};
 const String kSettings[kNumSettings] = {"LED Ring", "Shift RPM", "Warnings", "Coolant Warn", "Exit"};
-const String kGauges[kNumGauges] = {"RPM", "AFR", "Coolant", "MAP", "MAT", "Timing", "Voltage", "TPS", "Knock", "Barometer", "EGO Corr", "IAC", "Spark Dwell", "Boost Duty", "Idle Target", "AFR Target"};
+const String kGauges[kNumGauges] = {"RPM", "AFR", "Coolant", "MAP", "MAT", "Timing", "Voltage", "TPS", "Knock", "Barometer", "EGO Corr", "IAC", "Sprk Dwell", "Boost Duty", "Idl Target", "AFR Target"};
 const String kGraphs[kNumGraphs] = {"AFR", "MAP", "MAT"};
 
 enum ViewsMenu : int
