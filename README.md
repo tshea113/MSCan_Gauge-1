@@ -21,6 +21,7 @@ This project is a continuation of the work done by [merkur2k](https://github.com
 * [Adafruit BusIO](https://github.com/adafruit/Adafruit_BusIO) - I2C and SPI library
 * [FastLED](https://github.com/FastLED/FastLED) - LED ring
 * [EncoderTool](https://www.pjrc.com/teensy/arduino_libraries/Encoder.zip) - rotary encoder
+* [Bounce2](https://github.com/thomasfredericks/Bounce2) - button debouncing
 
 ## Component BOM
 Passives are 1206 package unless otherwise noted.

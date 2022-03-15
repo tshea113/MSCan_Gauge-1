@@ -7,6 +7,7 @@
 #include <FastLED.h>
 #include <EncoderTool.h>
 #include <EEPROM.h>
+#include <Bounce2.h>
 
 #include "megasquirt-messages.h"
 #include "pin-definitions.h"
@@ -20,9 +21,8 @@ CRGB leds[kNumLeds];
 
 // Encoder
 Encoder myEncoder;
+Bounce2::Button encoderButton;
 int encoder_index;
-bool is_button_pressed;
-volatile unsigned long last_millis;   //switch debouncing
 
 // FlexCAN
 // Teensy 3.2 only has CAN0, but Teensy 4.0 has CAN1, CAN2, and CAN3, so we must
@@ -127,11 +127,6 @@ void setup(void)
   myCan.begin();
   myCan.setBaudRate(kCanBaud);
 
-  // Set encoder pins as input with internal pull-up resistors enabled
-  pinMode(RBUTTON_INT, INPUT);
-  digitalWrite(RBUTTON_INT, HIGH);
-  attachInterrupt(RBUTTON_INT, DebounceIRQ, FALLING);
-
   // By default, we'll generate the high voltage from the 3.3v line internally! (neat!)
   display.begin(SSD1306_SWITCHCAPVCC, kScreenI2cAddress);
 
@@ -165,7 +160,9 @@ void setup(void)
   }
 
   myEncoder.begin(ENC_PIN_1, ENC_PIN_2);
-  is_button_pressed = false;
+  encoderButton.attach(ENC_BUTTON, INPUT_PULLUP);
+  encoderButton.interval(kButtonInterval);
+  encoderButton.setPressedState(LOW);
 
   delay(1000);
   digitalWrite(TEENSY_LED, 0);
@@ -184,6 +181,8 @@ void loop(void)
     gauge_blink = !gauge_blink;
     gaugeBlinkTimer.reset();
   }
+
+  encoderButton.update();
 
   // See if we have gotten any CAN messages in the last second. display an error if not
   if (commTimer.check() && !kDebugMode)
@@ -260,26 +259,6 @@ void loop(void)
 
     ReadCanMessage();
   }
-}
-
-// interrupt handler for the encoder button
-void DebounceIRQ ()
-{
-  // TODO: Probably shouldn't delay inside of an interrupt
-  if((unsigned long)(millis() - last_millis) >= (kDebounceTime * 10))
-  {
-    is_button_pressed = true;
-
-    // Return to a safe state after button press
-    encoder_index = 0;
-    myEncoder.setValue(0);
-  }
-  else
-  {
-    //end button
-    return;
-  }
-  last_millis = millis();
 }
 
 void DivideBy10(int val)
@@ -426,7 +405,7 @@ boolean IsOutOfBounds()
 void MenuCheck()
 {
   // Pressing the button brings up the menu or selects position
-  if (is_button_pressed)
+  if (encoderButton.pressed())
   {
     // Settings Menu
     if (menuState.in_settings)
@@ -461,6 +440,7 @@ void MenuCheck()
         case kExitSetting:
           menuState.settings_position = 0;
           menuState.in_settings = false;
+          menuState.is_setting_selected = false;
           menuState.in_menu = true;
           myEncoder.setLimits(0, kNumViews - 1, true);
           myEncoder.setValue(menuState.menu_position);
@@ -490,6 +470,7 @@ void MenuCheck()
         case kSettingView:
           menuState.in_settings = true;
           myEncoder.setLimits(0, kNumSettings - 1, true);
+          myEncoder.setValue(0);
           break;
         }
       }
@@ -500,7 +481,6 @@ void MenuCheck()
         myEncoder.setValue(menuState.menu_position);
       }
     }
-    is_button_pressed = false;
   }
 }
 
@@ -533,7 +513,7 @@ void MenuView()
   // Check for rotations
   if (myEncoder.valueChanged())
   {
-    encoder_index=myEncoder.getValue();
+    encoder_index = myEncoder.getValue();
     menuState.menu_position = encoder_index;
 
     if (kDebugMode)
