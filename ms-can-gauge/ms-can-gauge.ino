@@ -1063,97 +1063,91 @@ void SingleView()
 
   // }
 
-  byte dlength=strlen(data);
-  int midpos;
-
-  // dlength * (width of font) / 2 -1
-  // size 2 = 11
-  // size 3 = 17
-  // size 4 = 23
-
-  midpos = (63 - ((dlength * 23)/ 2));
+  int dlength = strlen(data);
+  int midpos = ((kOledHeight - 1) - ((dlength * kTextWidth4) / 2));
 
   display.setTextColor(WHITE);
-  display.setCursor(midpos,0);
   display.setTextSize(4);
+  display.setCursor(midpos, 0);
   display.print(data);
 
   display.setTextSize(2);
-  display.setCursor(8, (63 - 15));
+  display.setCursor(0, ((kOledHeight - 1) - kTextHeight2));
   display.print(label);
 
-  display.setCursor(0, 0);
   display.setTextSize(1);
+  display.setCursor(0, 0);
   display.print(menuState.gauge_single_position + 1);
+
   display.setTextSize(2);
 
   //Additional data for highest/lowest value
   switch(static_cast<Gauges>(menuState.gauge_single_position))
   {
   case kRPMGauge:
-    if (gaugeData.rpm > gaugeData.rpm_highest || millis() > (validity_window_highest + 30000))
+    if (gaugeData.rpm > gaugeData.rpm_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
     {
       gaugeData.rpm_highest = gaugeData.rpm;
       validity_window_highest = millis();
     }
-    display.setCursor((127 - 48), 31);
+    display.setCursor(((kOledWidth - 1) - (dlength * kTextWidth2)), (kOledHeight / 2) - 1);
     display.print(gaugeData.rpm_highest);
     break;
   case kAFRGauge:
-    if (gaugeData.afr > gaugeData.afr_highest || millis() > (validity_window_highest + 30000))
+    if (gaugeData.afr > gaugeData.afr_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
     {
       gaugeData.afr_highest = gaugeData.afr;
       validity_window_highest=millis();
     }
-    if (gaugeData.afr < gaugeData.afr_lowest || millis() > (validity_window_lowest + 30000))
+    if (gaugeData.afr < gaugeData.afr_lowest || millis() > (validity_window_lowest + kMinMaxGaugeInterval))
     {
       gaugeData.afr_lowest = gaugeData.afr;
       validity_window_lowest=millis();
     }
-    display.setCursor(0, 31);
+    display.setCursor(0, (kOledHeight / 2) - 1);
     DivideBy10(gaugeData.afr_lowest);
     display.print(temp_chars);
-    display.setCursor((127 - 48), 31);
+    display.setCursor(((kOledWidth - 1) - (dlength * kTextWidth2)), (kOledHeight / 2) - 1);
     DivideBy10(gaugeData.afr_highest);
     display.print(temp_chars);
     break;
   case kCoolantGauge:
-    if (gaugeData.coolant_temp > gaugeData.coolant_temp_highest || millis() > (validity_window_highest + 30000))
+    if (gaugeData.coolant_temp > gaugeData.coolant_temp_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
     {
       gaugeData.coolant_temp_highest = gaugeData.coolant_temp;
-      validity_window_highest=millis();
+      validity_window_highest = millis();
     }
-    display.setCursor((127 - 60), 31);
+    display.setCursor(((kOledWidth - 1) - (dlength * kTextWidth2)), (kOledHeight / 2) - 1);
     DivideBy10(gaugeData.coolant_temp_highest);
     display.print(temp_chars);
     break;
   case kMAPGauge:
-    if (gaugeData.map > gaugeData.map_highest || millis() > (validity_window_highest + 30000))
+    if (gaugeData.map > gaugeData.map_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
     {
       gaugeData.map_highest = gaugeData.map;
-      validity_window_highest=millis();
+      validity_window_highest = millis();
     }
-    display.setCursor((127 - 48), 31);
+    display.setCursor(((kOledWidth - 1) - (dlength * kTextWidth2)), (kOledHeight / 2) - 1);
     DivideBy10(gaugeData.map_highest);
     display.print(temp_chars);
     break;
   case kMATGauge:
-    if (gaugeData.mat > gaugeData.mat_highest || millis() > (validity_window_highest + 30000))
+    if (gaugeData.mat > gaugeData.mat_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
     {
       gaugeData.mat_highest = gaugeData.mat;
-      validity_window_highest=millis();
+      validity_window_highest = millis();
     }
-    display.setCursor((127 - 48), 31);
+    display.setCursor(((kOledWidth - 1) - (dlength * kTextWidth2)), (kOledHeight / 2) - 1);
     DivideBy10(gaugeData.mat_highest);
     display.print(temp_chars);
     break;
   case kKnockGauge:
-    if (gaugeData.knock > gaugeData.knock_highest || millis() > (validity_window_highest + 30000))
+    if (gaugeData.knock > gaugeData.knock_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
     {
       gaugeData.knock_highest = gaugeData.knock;
-      validity_window_highest=millis();
+      validity_window_highest = millis();
     }
-    display.setCursor((127 - 48), 31);
+    display.setCursor(((kOledWidth - 1) - (dlength * kTextWidth2)), (kOledHeight / 2) - 1);
     DivideBy10(gaugeData.knock_highest);
     display.print(temp_chars);
     break;

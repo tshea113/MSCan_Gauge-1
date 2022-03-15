@@ -18,13 +18,30 @@ const int     kOledWidth                  = 128;    // Width of the OLED screen 
 const int     kCanBaud                    = 500000; // CAN baud rate
 const int     kMsDataNameMaxLength        = 10;     // Maximum length of MS data field name
 const int     kMsDataBinNameMaxLength     = 14;     // Maximum length of MS data field name
-const int     kButtonInterval             = 10;      // Button debounce time in ms
+const int     kButtonInterval             = 10;     // Button debounce time in ms
+const int     kMinMaxGaugeInterval        = 30000;  // Reset interval for min/max gauge values in ms
 
 // Settings Constraints
 const int kMinRpm          = 5000;    // Minimum RPM for shift light setting
 const int kMaxRpm          = 9900;    // Maximum RPM for shift light setting
 const int kRpmInterval     = 100;     // Smallest interval for shift light setting
 const int kMaxCoolantTemp  = 300;     // Maximum coolant temp for warning
+
+enum TextWidth : int
+{
+  kTextWidth1 = 6,
+  kTextWidth2 = 12,
+  kTextWidth3 = 18,
+  kTextWidth4 = 24
+};
+
+enum TextHeight : int
+{
+  kTextHeight1 = 8,
+  kTextHeight2 = 16,
+  kTextHeight3 = 24,
+  kTextHeight4 = 32
+};
 
 // Program memory constants
 const uint8_t miata_logo [] PROGMEM = 
