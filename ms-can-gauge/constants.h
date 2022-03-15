@@ -18,6 +18,7 @@ const int     kOledWidth                  = 128;    // Width of the OLED screen 
 const int     kCanBaud                    = 500000; // CAN baud rate
 const int     kMsDataNameMaxLength        = 10;     // Maximum length of MS data field name
 const int     kMsDataBinNameMaxLength     = 14;     // Maximum length of MS data field name
+const int     kButtonInterval             = 10;      // Button debounce time in ms
 
 // Settings Constraints
 const int kMinRpm          = 5000;    // Minimum RPM for shift light setting
