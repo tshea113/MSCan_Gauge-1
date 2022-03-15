@@ -20,7 +20,7 @@ This project is a continuation of the work done by [merkur2k](https://github.com
 * [Adafruit GFX](https://github.com/adafruit/Adafruit-GFX-Library) - required by SSD1306
 * [Adafruit BusIO](https://github.com/adafruit/Adafruit_BusIO) - I2C and SPI library
 * [FastLED](https://github.com/FastLED/FastLED) - LED ring
-* [Encoder](https://www.pjrc.com/teensy/arduino_libraries/Encoder.zip) - rotary encoder
+* [EncoderTool](https://www.pjrc.com/teensy/arduino_libraries/Encoder.zip) - rotary encoder
 
 ## Component BOM
 Passives are 1206 package unless otherwise noted.
