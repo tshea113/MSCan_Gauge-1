@@ -1034,7 +1034,6 @@ void SingleView()
       strcpy(data, temp_chars);
       break;
   }
-  // }
   // TODO: I'm not sure if this is even needed. Need to figure out if this data is useful. If so the data should loop properly. Maybe update the UI for this a bit?
   // else
   // {
@@ -1060,7 +1059,6 @@ void SingleView()
   //     data[2]='f';
   //     data[3]='\0';
   //   }
-
   // }
 
   int dlength = strlen(data);
