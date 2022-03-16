@@ -112,36 +112,6 @@ const uint8_t miata_logo [] PROGMEM =
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
-struct MSDataObject
-{
-  char name[kMsDataNameMaxLength];
-  int block;                      // max val 32?
-  int offset;                     // max val?
-  int reqbytes;                   // max val 8
-  int mult;                       // does this need to be * 0.1 ?
-};
-
-const MSDataObject MSData[] PROGMEM =
-{
-// string,  block, offset, reqbytes, mult,      div
-  {"RPM",     7,    6,        2,      0   }, // 0
-  {"AFR",     7,    252,      1,      0   }, // 1
-  {"CLT",     7,    22,       2,      1   }, // 2
-  {"MAP",     7,    18,       2,      1   }, // 3
-  {"MAT",     7,    20,       2,      1   }, // 4
-  {"SPKADV",  7,    8,        2,      1   }, // 5
-  {"BATTV",   7,    26,       2,      1   }, // 6
-  {"TPS",     7,    24,       2,      1   }, // 7
-  {"Knock",   7,    32,       2,      1   }, // 8
-  {"Baro",    7,    16,       2,      1   }, // 9
-  {"EGOc",    7,    34,       2,      1   }, // 10
-  {"IAC",     7,    54,       2,      0   }, // 11 -- this was GFC's to 49 / 125
-  {"dwell",   7,    62,       2,      1   }, // 12
-  {"bstduty", 7,    39,       1,      0   }, // 13 boost duty cycle
-  {"idletar", 7,    380,      2,      0   }, // 14
-  {"AFRtgt",  7,    12,       1,      1   }, // 15
-};
-
 struct MSDataBinaryObject 
 {
   char name[kMsDataBinNameMaxLength];
