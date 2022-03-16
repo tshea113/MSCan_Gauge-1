@@ -63,8 +63,8 @@ msg_req_data_raw msg_req_data;
 unsigned long validity_window_highest; // for hi/low + histogram window update
 unsigned long validity_window_lowest;
 
-byte histogram[64]; // 512 memory usage
-byte histogram_index;
+int histogram[64];
+int histogram_index;
 
 // -------------------------------------------------------------
 static void LedBlink()
@@ -263,7 +263,7 @@ void loop(void)
 
 void DivideBy10(int val)
 {
-  byte length;
+  int length;
 
   itoa(val, temp_chars, 10);
   length = strlen(temp_chars);
@@ -622,7 +622,7 @@ void SettingsView()
 
 void WarningView()
 {
-  byte dlength;
+  int dlength;
   int midpos;
 
   display.clearDisplay();
@@ -761,11 +761,6 @@ void WarningView()
 
 void DashboardView()
 {
-  //hard coded for style
-  // fonts are 5x7 * textsize
-  // size 1 .. 5 x 7
-  // size 2 .. 10 x 14
-  //Vitals - AFR, RPM, MAP,
   display.clearDisplay();
 
   display.setTextSize(2);
@@ -792,7 +787,7 @@ void DashboardView()
   display.print("CLT");
   display.setCursor(92, 18);
   display.setTextSize(2);
-  display.print(gaugeData.coolant_temp/10);
+  display.print(gaugeData.coolant_temp / 10);
 
   //line3
   display.setCursor(0, 40);
@@ -800,10 +795,10 @@ void DashboardView()
   display.print("MAP");
   display.setCursor(20, 40);
   display.setTextSize(2);
-  display.print(gaugeData.map/10);
+  display.print(gaugeData.map / 10);
 
   // contextual gauge - if idle on, show IAC%
-  if ( bitRead(gaugeData.status_2,7) == 1)
+  if ( bitRead(gaugeData.status_2, 7) == 1)
   {
     display.setCursor(72, 40);
     display.setTextSize(1);
@@ -826,11 +821,11 @@ void DashboardView()
     DivideBy10(psi);
     display.print(temp_chars);
 
-    display.setCursor(72, 40);
+    display.setCursor(72, 47);
     display.setTextSize(1);
     display.print("MAT");
     display.setCursor(92, 47);
-    display.print(gaugeData.mat/10);
+    display.print(gaugeData.mat / 10);
 
   }
   else
@@ -838,9 +833,9 @@ void DashboardView()
     display.setCursor(72, 40);
     display.setTextSize(1);
     display.print("MAT");
-    display.setCursor(92,40);
+    display.setCursor(92, 40);
     display.setTextSize(2);
-    display.print(gaugeData.mat/10);
+    display.print(gaugeData.mat / 10);
   }
 
   BottomView();
@@ -952,7 +947,6 @@ void SingleView()
 {
   char data[10];
   String label;
-  // byte temp_index;
   display.clearDisplay();
 
   // Check for rotations
@@ -1158,12 +1152,12 @@ void SingleView()
 
 void GraphView()
 {
-  byte val;
+  int val;
   
   // Check for rotations
   if (myEncoder.valueChanged())
   {
-    encoder_index=myEncoder.getValue();
+    encoder_index = myEncoder.getValue();
     menuState.gauge_graph_position = encoder_index;
 
     if (kDebugMode)
@@ -1180,6 +1174,9 @@ void GraphView()
   {
     display.clearDisplay();
 
+    // TODO: The values here are going to be within some expected range. Probably could
+    // improve the normalization algorithm here. As of now I don't really care about this
+    // view enough to do anything about it.
     switch (static_cast<Graphs>(menuState.gauge_graph_position))
     {
     // 0-50 value normalization
@@ -1187,10 +1184,10 @@ void GraphView()
       val = (gaugeData.afr - 100) / 2;  // real rough estimation here here of afr on a 0-50 scale
       break;
     case kMAPGraph:
-      val = ((gaugeData.map/10) - 30) / 4;
+      val = ((gaugeData.map / 10) - 30) / 4;
       break;
     case kMATGraph:
-      val = (gaugeData.mat/10) / 4;
+      val = (gaugeData.mat / 10) / 4;
       break;
     default:
       val = 0;
@@ -1202,11 +1199,11 @@ void GraphView()
     }
 
     histogram_index++;
-    if (histogram_index >=64)
+    if (histogram_index >= 64)
     {
-      histogram_index=0;
+      histogram_index = 0;
     }
-    histogram[histogram_index]=val;
+    histogram[histogram_index] = val;
 
     for (byte i = 0; i < 64; i++)
     {
@@ -1215,11 +1212,13 @@ void GraphView()
       {
         x = 64 + histogram_index - i;
       }
+
+      // Draw a line two pixels wide for each data point
       display.drawFastVLine((128 - (i * 2)), (64 - histogram[x]), 64, WHITE);
       display.drawFastVLine((127 - (i * 2)), (64 - histogram[x]), 64, WHITE);
     }
 
-    display.setCursor(20,0);
+    display.setCursor(20, 0);
     display.setTextSize(2);
     display.setTextColor(WHITE);
     display.print(kGraphs[menuState.gauge_graph_position]);
@@ -1231,7 +1230,7 @@ void GraphView()
       DivideBy10(gaugeData.afr);
       display.print(temp_chars);
       display.drawFastHLine(0, 40, 128, WHITE); // stoich 14.7 line
-      for (byte x=1; x < 128; x = x + 2)
+      for (int x = 1; x < 128; x += 2)
       {
         display.drawPixel(x, 40, BLACK);
       }
@@ -1239,7 +1238,7 @@ void GraphView()
     case kMAPGraph:
       display.print(gaugeData.map/10);
       display.drawFastHLine(0, 47, 128, WHITE); // Baro line.. roughly 98kpa
-      for (byte x=1; x < 128; x = x + 2)
+      for (int x = 1; x < 128; x += 2)
       {
         display.drawPixel(x, 47, BLACK);
       }
