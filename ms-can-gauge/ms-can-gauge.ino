@@ -1,3 +1,16 @@
+#ifdef __cplusplus
+extern "C" {
+#endif
+  void startup_early_hook() {
+    WDOG_TOVALL = 2000; // The next 2 lines sets the time-out value. This is the value that the watchdog timer compare itself to.
+    WDOG_TOVALH = 0;
+    WDOG_STCTRLH = (WDOG_STCTRLH_ALLOWUPDATE | WDOG_STCTRLH_WDOGEN | WDOG_STCTRLH_WAITEN | WDOG_STCTRLH_STOPEN); // Enable WDG
+    WDOG_PRESC = 0; // prescaler 
+  }
+#ifdef __cplusplus
+}
+#endif
+
 #include <Metro.h>
 #include <FlexCAN_T4.h>
 #include <Wire.h>
@@ -40,17 +53,19 @@ Adafruit_SSD1306 display(kOledWidth, kOledHeight, &Wire, OLED_RESET);
 // Metro ticks are milliseconds
 Metro commTimer = Metro(kCanTimeout);
 Metro displayTimer = Metro(kDisplayRefresh);
-Metro ledTimer = Metro(kLedFlashTimer);
 Metro gaugeBlinkTimer = Metro(kGaugeFlashTimer);
 boolean connection_state = false;
 boolean gauge_blink = false;
 
-//MS data vars
+// MS data vars
 GaugeData gaugeData;
 
 // Menu vars
 MenuState menuState;
 Settings gaugeSettings;
+
+// Watchdog timer
+IntervalTimer wdTimer;
 
 int neo_brightness = 1;
 char temp_chars[11];
@@ -67,18 +82,8 @@ int histogram[64];
 int histogram_index;
 
 // -------------------------------------------------------------
-static void LedBlink()
-{
-  ledTimer.reset();
-  digitalWrite(TEENSY_LED, 1);
-}
-
-// -------------------------------------------------------------
 void setup(void)
 {
-  pinMode(TEENSY_LED, OUTPUT);
-  digitalWrite(TEENSY_LED, 1);
-
   // On first run of the gauge, the EEPROM will have garbage values. To fix this,
   // we check that all values are written before starting.
   if (EEPROM.read(kEEPROMInitAddr) != kEEPROMValidId)
@@ -164,18 +169,16 @@ void setup(void)
   encoderButton.interval(kButtonInterval);
   encoderButton.setPressedState(LOW);
 
-  delay(1000);
-  digitalWrite(TEENSY_LED, 0);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(100);
+  digitalWrite(LED_BUILTIN, LOW);
+  wdTimer.begin(KickTheDog, 500000); // kick the dog every 500msec
 }
 
 // -------------------------------------------------------------
 void loop(void)
 {
-  if (ledTimer.check() && digitalRead(TEENSY_LED))
-  {
-    digitalWrite(TEENSY_LED, 0);
-    ledTimer.reset();
-  }
   if (gaugeBlinkTimer.check())
   {
     gauge_blink = !gauge_blink;
@@ -255,10 +258,19 @@ void loop(void)
   {
     commTimer.reset();
     connection_state = true;
-    LedBlink();
 
     ReadCanMessage();
   }
+}
+
+void KickTheDog()
+{
+  Serial.println("Kicking the dog!");
+  digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+  noInterrupts();
+  WDOG_REFRESH = 0xA602;
+  WDOG_REFRESH = 0xB480;
+  interrupts();
 }
 
 void DivideBy10(int val)
