@@ -313,7 +313,7 @@ void ReadCanMessage()
     gaugeData.ego_correction = (int)(word(rxMessage.buf[2], rxMessage.buf[3]));
     break;
   case 1526: // 6
-    gaugeData.iac = (int)(word(rxMessage.buf[6], rxMessage.buf[7])); //IAC = (IAC * 49) / 125;
+    gaugeData.iac = ((int)(word(rxMessage.buf[6], rxMessage.buf[7])) * 49) / 125;
   case 1529: // 9
     gaugeData.dwell = (int)(word(rxMessage.buf[4], rxMessage.buf[5]));
     break;
