@@ -4,12 +4,14 @@ const int kNumSettings                  = 5;      // Number of settings
 const int kNumGauges                    = 16;     // Number of gauges
 const int kNumGraphs                    = 3;      // Number of graph gauges
 const int kNumBottomMenuItems           = 6;      // Number of items in the dashboard bottom menu
+const int kNumDashboardItems            = 6;      // Number of items in the dashboard
 
 const String kViews[kNumViews] = {"Dashboard", "Single", "Graph", "Settings"};
 const String kSettings[kNumSettings] = {"LED Ring", "Shift RPM", "Warnings", "Coolant Warn", "Exit"};
 const String kGauges[kNumGauges] = {"RPM", "AFR", "Coolant", "MAP", "MAT", "Timing", "Voltage", "TPS", "Knock", "Barometer", "EGO Corr", "IAC", "Sprk Dwell", "Boost Duty", "Idl Target", "AFR Target"};
 const String kGraphs[kNumGraphs] = {"AFR", "MAP", "MAT"};
 const String kBottomMenuItems[kNumBottomMenuItems] = {"CEL", "Fan", "Idl", "Knk", "Bst", "WUE"};
+const String kDashboardItems[kNumDashboardItems] = {"RPM", "AFR", "CLT", "MAP", "MAT", "PSI"};
 
 enum ViewsMenu : int
 {

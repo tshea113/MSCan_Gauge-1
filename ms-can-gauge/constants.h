@@ -3,7 +3,7 @@
 // User configuerable constants
 const int  kMyCanId      = 10;     // CAN ID of this unit
 const int  kMsCanId      = 0;      // CAN ID of the Megasquirt (should almost always be 0)
-const bool kDebugMode    = true;  // Debug mode for testing menus, screens, etc.
+const bool kDebugMode    = false;  // Debug mode for testing menus, screens, etc.
 
 // Constants
 const uint8_t kScreenI2cAddress           = 0x3D;   // I2C address of the OLED screen
@@ -24,6 +24,8 @@ const int     kOledHeight                 = 64;     // Height of the OLED screen
 const int     kOledWidth                  = 128;    // Width of the OLED screen in pixels
 const int     kBottomMenuHeight           = 11;     // Height of the dashboard bottom menu in pixels
 const int     kBottomMenuWidth            = 21;     // Width of each item in the dashboard bottom menu
+const int     kDashboardLineHeight        = 17;     // Height of the dashboard lines in pixels
+const int     kDashboardColumnWidth       = 72;     // Width of the dashboard column
 
 // Settings Constraints
 const int kMinRpm          = 5000;    // Minimum RPM for shift light setting
