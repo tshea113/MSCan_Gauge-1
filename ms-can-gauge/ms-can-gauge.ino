@@ -68,6 +68,7 @@ Settings gaugeSettings;
 IntervalTimer wdTimer;
 
 int neo_brightness = 1;
+// TODO: Remove this when DivideBy10() is removed.
 char temp_chars[11];
 
 static CAN_message_t txMessage,rxMessage;
@@ -273,6 +274,14 @@ void KickTheDog()
   interrupts();
 }
 
+String ToDecimal(int val)
+{
+  String temp = String(val);
+
+  return temp.substring(0, temp.length() - 1) + '.' + temp.charAt(temp.length() - 1);
+}
+
+// TODO: Get rid of this eventually. We don't need to use a global here.
 void DivideBy10(int val)
 {
   int length;
@@ -775,184 +784,115 @@ void DashboardView()
 {
   display.clearDisplay();
 
-  display.setTextSize(2);
   display.setTextColor(WHITE);
-  display.setCursor(0,0);
 
-  display.setCursor(41, 0); // 4 char normally - 4 * 10 = 40, - 128 = 88, /2 = 44
+  int16_t labelXBound = 0;
+  int16_t labelYBound = 0;
+  uint16_t labelWidth = 0;
+  uint16_t labelHeight = 0;
+
+  // Dashboard Line 1
+  // RPM
+  display.setTextSize(1);
+  display.getTextBounds(kDashboardItems[0], 0, 0, &labelXBound, &labelYBound, &labelWidth, &labelHeight);
+  display.setCursor(0, (kDashboardLineHeight - 1) - labelHeight);
+  display.print(kDashboardItems[0]);
+
+  display.setTextSize(2);
+  display.setCursor(labelWidth + 2, 1);
   display.println(gaugeData.rpm);
-  display.setTextSize(1);
-  display.setCursor(21, 7);
-  display.print("RPM");
 
-  //line2
-  display.setCursor(0, 26);
+  // Dashboard Line 2
+  // AFR
   display.setTextSize(1);
-  display.print("AFR");
-  display.setCursor(20, 19);
-  display.setTextSize(2);
-  DivideBy10(gaugeData.afr);
-  display.print(temp_chars);
+  display.getTextBounds(kDashboardItems[1], 0, 0, &labelXBound, &labelYBound, &labelWidth, &labelHeight);
+  display.setCursor(0, ((2 * kDashboardLineHeight) - 1) - labelHeight);
+  display.print(kDashboardItems[1]);
 
-  display.setCursor(72, 25);
-  display.setTextSize(1);
-  display.print("CLT");
-  display.setCursor(92, 18);
   display.setTextSize(2);
+  display.setCursor(labelWidth + 2, kDashboardLineHeight + 1);
+  display.print(ToDecimal(gaugeData.afr));
+
+  // CLT
+  display.setTextSize(1);
+  display.getTextBounds(kDashboardItems[2], kDashboardColumnWidth, 0, &labelXBound, &labelYBound, &labelWidth, &labelHeight);
+  display.setCursor(kDashboardColumnWidth, ((2 * kDashboardLineHeight) - 1) - labelHeight);
+  display.print(kDashboardItems[2]);
+
+  display.setTextSize(2);
+  display.setCursor(kDashboardColumnWidth + (labelWidth + 2), kDashboardLineHeight + 1);
   display.print(gaugeData.coolant_temp / 10);
 
-  //line3
-  display.setCursor(0, 40);
-  display.setTextSize(1);
-  display.print("MAP");
-  display.setCursor(20, 40);
-  display.setTextSize(2);
-  display.print(gaugeData.map / 10);
-
-  // contextual gauge - if idle on, show IAC%
-  if ( bitRead(gaugeData.status_2, 7) == 1)
+  // Dashboard Line 3
+  // In boost, show boost psi, otherwise show MAT.
+  if (gaugeData.map > gaugeData.barometer)
   {
-    display.setCursor(72, 40);
+    // PSI
     display.setTextSize(1);
-    display.print("IAC");
-    display.setCursor(92, 40);
+    display.getTextBounds(kDashboardItems[5], 0, 0, &labelXBound, &labelYBound, &labelWidth, &labelHeight);
+    display.setCursor(0, (2 * kDashboardLineHeight) + 1);
+    display.print(kDashboardItems[5]);
+
     display.setTextSize(2);
-    display.print(gaugeData.iac);
-  }
-  else if (gaugeData.map > gaugeData.barometer)
-  {
-    int psi;
-    display.setCursor(72, 38);
-    display.setTextSize(1);
-    display.print("PSI");
-    display.setCursor(92, 38);
-    display.setTextSize(1);
+    display.setCursor(labelWidth + 2, (2 * kDashboardLineHeight) + 1);
     // 6.895kpa = 1psi
-    psi = gaugeData.map - gaugeData.barometer;
-    psi=(psi * 200) / 1379;
-    DivideBy10(psi);
-    display.print(temp_chars);
-
-    display.setCursor(72, 47);
-    display.setTextSize(1);
-    display.print("MAT");
-    display.setCursor(92, 47);
-    display.print(gaugeData.mat / 10);
-
+    display.print(ToDecimal(((gaugeData.map - gaugeData.barometer) * 200) / 1379));
   }
   else
   {
-    display.setCursor(72, 40);
+    // MAT
     display.setTextSize(1);
-    display.print("MAT");
-    display.setCursor(92, 40);
+    display.getTextBounds(kDashboardItems[4], 0, 0, &labelXBound, &labelYBound, &labelWidth, &labelHeight);
+    display.setCursor(0, (2 * kDashboardLineHeight) + 1);
+    display.print(kDashboardItems[4]);
+
     display.setTextSize(2);
+    display.setCursor(labelWidth + 2, (2 * kDashboardLineHeight) + 1);
     display.print(gaugeData.mat / 10);
   }
 
+  // MAP
+  display.setTextSize(1);
+  display.getTextBounds(kDashboardItems[3], kDashboardColumnWidth, 0, &labelXBound, &labelYBound, &labelWidth, &labelHeight);
+  display.setCursor(kDashboardColumnWidth, (2 * kDashboardLineHeight) + 1);
+  display.print(kDashboardItems[3]);
+
+  display.setTextSize(2);
+  display.setCursor(kDashboardColumnWidth + (labelWidth + 2), (2 * kDashboardLineHeight) + 1);
+  display.print(gaugeData.map / 10);
+
   BottomView();
+  display.display();
 }
 
 void BottomView()
 {
+  // Conditions for lighting up the menu items
+  bool highlightItem[kNumBottomMenuItems];
+  highlightItem[0] = gaugeData.check_engine_light != 0;
+  highlightItem[1] = bitRead(gaugeData.status_6,6) == 1;
+  highlightItem[2] = bitRead(gaugeData.status_2,7) == 1;
+  highlightItem[3] = bitRead(gaugeData.status_7,4) == 1;
+  highlightItem[4] = bitRead(gaugeData.status_2,6) == 1;
+  highlightItem[5] = bitRead(gaugeData.engine,3) == 1;
+
   display.setTextSize(1);
-  display.drawFastHLine(1, (63 - 7), 126, WHITE);
-  display.setCursor(0, 57);
-  display.setTextColor(BLACK, WHITE);
 
-  //CEL
-  if ( gaugeData.check_engine_light != 0 )
+  for (int i = 0; i < kNumBottomMenuItems; i++)
   {
-    display.setTextColor(BLACK, WHITE);
-    display.drawFastVLine(2, 57, 8, WHITE);
+    if (highlightItem[i])
+    {
+      display.setTextColor(BLACK, WHITE);
+      display.fillRect(i * (kBottomMenuWidth - 1), ((kOledHeight - 1) - kBottomMenuHeight), kBottomMenuWidth, kBottomMenuHeight, WHITE);
+    }
+    else
+    {
+      display.setTextColor(WHITE);
+      display.drawRect(i * (kBottomMenuWidth - 1), ((kOledHeight - 1) - kBottomMenuHeight), kBottomMenuWidth, kBottomMenuHeight, WHITE);
+    }
+    display.setCursor((i * (kBottomMenuWidth - 1)) + 2, (kOledHeight - kBottomMenuHeight) + 1);
+    display.print(kBottomMenuItems[i]);
   }
-  else
-  {
-    display.setTextColor(WHITE);
-  }
-  display.setCursor(3, 57);
-  display.print("CEL");
-  display.drawFastVLine(1, 57, 8, WHITE);
-
-  //Fan
-  if ( bitRead(gaugeData.status_6,6) == 1)
-  {
-    display.setTextColor(BLACK, WHITE);
-    display.drawFastVLine(23, 57, 8, WHITE);
-    display.drawFastVLine(22, 57, 8, WHITE);
-    display.drawFastVLine(42, 57, 8, WHITE);
-  }
-  else
-  {
-    display.setTextColor(WHITE);
-  }
-  display.setCursor(24, 57);
-  display.print("Fan");
-  display.drawFastVLine(21, 57, 8, WHITE);
-
-  //Idle
-  if ( bitRead(gaugeData.status_2,7) == 1)
-  {
-    display.setTextColor(BLACK, WHITE);
-    display.drawFastVLine(44, 57, 8, WHITE);
-  }
-  else
-  {
-    display.setTextColor(WHITE);
-  }
-  display.setCursor(45, 57);
-  display.print("Idl");
-  display.drawFastVLine(43, 57, 8, WHITE);
-
-  //Knock
-  if ( bitRead(gaugeData.status_7,4) == 1)
-  {
-    display.setTextColor(BLACK, WHITE);
-    display.drawFastVLine(65, 57, 8, WHITE);
-    display.drawFastVLine(64, 57, 8, WHITE);
-    display.drawFastVLine(84, 57, 8, WHITE);
-  }
-  else
-  {
-    display.setTextColor(WHITE);
-  }
-  display.setCursor(66, 57);
-  display.print("Knk");
-  display.drawFastVLine(63, 57, 8, WHITE);
-
-  //Overboost
-  if ( bitRead(gaugeData.status_2,6) == 1)
-  {
-    display.setTextColor(BLACK, WHITE);
-    display.drawFastVLine(87, 57, 8, WHITE);
-    display.drawFastVLine(86, 57, 8, WHITE);
-  }
-  else
-  {
-    display.setTextColor(WHITE);
-  }
-  display.setCursor(88, 57);
-  display.print("Bst");
-  display.drawFastVLine(85, 57, 8, WHITE);
-
-  //WUE
-  if ( bitRead(gaugeData.engine,3) == 1)
-  {
-    display.setTextColor(BLACK, WHITE);
-    display.drawFastVLine(107, 57, 8, WHITE);
-  }
-  else
-  {
-    display.setTextColor(WHITE);
-  }
-  display.setCursor(108, 57);
-  display.print("WUE");
-  display.drawFastVLine(106, 57, 8, WHITE);
-  display.drawFastVLine(126, 57, 8, WHITE);
-
-  // FAN, WUE, ASE, CEL, Idl, Knk, over boost
-  // CEL - Idl - FAN - KnK - BST - AFR
-  display.display();
 }
 
 void SingleView()

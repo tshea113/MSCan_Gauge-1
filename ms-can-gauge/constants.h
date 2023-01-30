@@ -13,13 +13,19 @@ const int     kLedFlashTimer              = 1;      // How long to flash the led
 const int     kGaugeFlashTimer            = 50;     // Blink the led ring pixels during certain conditions
 const int     kNumLeds                    = 16;     // Number of LEDs on the NeoPixel ring
 const int     kDebounceTime               = 25;     // Debouncing Time - 150 is good, 200 is better, 250 seems worse
-const int     kOledHeight                 = 64;     // Height of the OLED screen in pixels
-const int     kOledWidth                  = 128;    // Width of the OLED screen in pixels
 const int     kCanBaud                    = 500000; // CAN baud rate
 const int     kMsDataNameMaxLength        = 10;     // Maximum length of MS data field name
 const int     kMsDataBinNameMaxLength     = 14;     // Maximum length of MS data field name
 const int     kButtonInterval             = 10;     // Button debounce time in ms
 const int     kMinMaxGaugeInterval        = 30000;  // Reset interval for min/max gauge values in ms
+
+// Display Constants
+const int     kOledHeight                 = 64;     // Height of the OLED screen in pixels
+const int     kOledWidth                  = 128;    // Width of the OLED screen in pixels
+const int     kBottomMenuHeight           = 11;     // Height of the dashboard bottom menu in pixels
+const int     kBottomMenuWidth            = 21;     // Width of each item in the dashboard bottom menu
+const int     kDashboardLineHeight        = 17;     // Height of the dashboard lines in pixels
+const int     kDashboardColumnWidth       = 72;     // Width of the dashboard column
 
 // Settings Constraints
 const int kMinRpm          = 5000;    // Minimum RPM for shift light setting
