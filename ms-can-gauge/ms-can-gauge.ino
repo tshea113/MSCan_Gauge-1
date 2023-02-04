@@ -187,6 +187,7 @@ void loop(void)
   }
 
   encoderButton.update();
+  MenuCheck();
 
   // See if we have gotten any CAN messages in the last second. display an error if not
   if (commTimer.check() && !kDebugMode)
@@ -205,10 +206,8 @@ void loop(void)
   }
 
   // main display routine
-  if ((connection_state && displayTimer.check()) || kDebugMode)
+  if ((connection_state || kDebugMode) && displayTimer.check())
   {
-    MenuCheck();
-
     if (gaugeSettings.led_ring_enable)
     {
       ShiftLightView();
@@ -266,7 +265,7 @@ void loop(void)
 
 void KickTheDog()
 {
-  Serial.println("Kicking the dog!");
+  if (kDebugMode) Serial.println("Kicking the dog!");
   digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
   noInterrupts();
   WDOG_REFRESH = 0xA602;
@@ -428,6 +427,7 @@ void MenuCheck()
   // Pressing the button brings up the menu or selects position
   if (encoderButton.pressed())
   {
+    if (kDebugMode) Serial.println("Button pressed!");
     // Settings Menu
     if (menuState.in_settings)
     {
