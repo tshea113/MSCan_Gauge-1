@@ -1,14 +1,14 @@
 // Constants
 const int kNumViews                     = 4;      // Number of gauge views
 const int kNumSettings                  = 5;      // Number of settings
-const int kNumGauges                    = 16;     // Number of gauges
+const int kNumGauges                    = 17;     // Number of gauges
 const int kNumGraphs                    = 3;      // Number of graph gauges
 const int kNumBottomMenuItems           = 6;      // Number of items in the dashboard bottom menu
 const int kNumDashboardItems            = 6;      // Number of items in the dashboard
 
 const String kViews[kNumViews] = {"Dashboard", "Single", "Graph", "Settings"};
 const String kSettings[kNumSettings] = {"LED Ring", "Shift RPM", "Warnings", "Coolant Warn", "Exit"};
-const String kGauges[kNumGauges] = {"RPM", "AFR", "Coolant", "MAP", "MAT", "Timing", "Voltage", "TPS", "Knock", "Barometer", "EGO Corr", "IAC", "Sprk Dwell", "Boost Duty", "Idl Target", "AFR Target"};
+const String kGauges[kNumGauges] = {"RPM", "AFR", "Coolant", "MAP", "MAT", "Boost", "Voltage", "TPS", "Knock", "Barometer", "EGO Corr", "IAC", "Sprk Dwell", "Boost Duty", "Idl Target", "AFR Target", "Timing"};
 const String kGraphs[kNumGraphs] = {"AFR", "MAP", "MAT"};
 const String kBottomMenuItems[kNumBottomMenuItems] = {"CEL", "Fan", "Idl", "Knk", "Bst", "WUE"};
 const String kDashboardItems[kNumDashboardItems] = {"RPM", "AFR", "CLT", "MAP", "MAT", "PSI"};
@@ -37,7 +37,7 @@ enum Gauges : int
   kCoolantGauge = 2,
   kMAPGauge = 3,
   kMATGauge = 4,
-  kTimingGauge = 5,
+  kBoostGauge = 5,
   kVoltageGauge = 6,
   kTPSGauge = 7,
   kKnockGauge = 8,
@@ -47,7 +47,8 @@ enum Gauges : int
   kSparkDwellGauge = 12,
   kBoostDutyGauge = 13,
   kIdleTargetGauge = 14,
-  kAfrTargetGauge = 15
+  kAfrTargetGauge = 15,
+  kTimingGauge = 16
 };
 
 enum Graphs : int
@@ -93,6 +94,7 @@ struct GaugeData
   int coolant_temp;
   int map;
   int mat;
+  int boost_psi;
   int spark_advance;
   int battery_voltage;
   int tps;
@@ -106,6 +108,7 @@ struct GaugeData
   int afr;
   int afr_target;
   int map_highest;
+  int boost_psi_highest;
   int rpm_highest;
   int coolant_temp_highest;
   int mat_highest;

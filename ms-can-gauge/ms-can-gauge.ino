@@ -178,25 +178,6 @@ void setup(void)
 // -------------------------------------------------------------
 void loop(void)
 {
-
-  // DEBUG
-  gaugeData.rpm = 9999;
-  gaugeData.afr = 999;
-  gaugeData.coolant_temp = 2209;
-  gaugeData.map = 9999;
-  gaugeData.mat = 9999;
-  gaugeData.spark_advance = 9999;
-  gaugeData.battery_voltage = 999;
-  gaugeData.tps = 9999;
-  gaugeData.knock = 9999;
-  gaugeData.barometer = 9999;
-  gaugeData.ego_correction = 9999;
-  gaugeData.iac = 9999;
-  gaugeData.dwell = 9999;
-  gaugeData.boost_duty = 9999;
-  gaugeData.idle_target = 9999;
-  gaugeData.afr_target = 9999;
-
   if (gaugeBlinkTimer.check())
   {
     gauge_blink = !gauge_blink;
@@ -315,6 +296,8 @@ void ReadCanMessage()
     gaugeData.map = (int)(word(rxMessage.buf[2], rxMessage.buf[3]));
     gaugeData.mat = (int)(word(rxMessage.buf[4], rxMessage.buf[5]));
     gaugeData.coolant_temp = (int)(word(rxMessage.buf[6], rxMessage.buf[7]));
+    // 6.895kpa = 1psi
+    gaugeData.boost_psi = ((gaugeData.map - gaugeData.barometer) * 200) / 1379;
     break;
   case 1523: // 3
     gaugeData.tps = (int)(word(rxMessage.buf[0], rxMessage.buf[1]));
@@ -840,7 +823,7 @@ void DashboardView()
     display.setTextSize(2);
     display.setCursor(labelWidth + 2, (2 * kDashboardLineHeight) + 1);
     // 6.895kpa = 1psi
-    display.print(ToDecimal(((gaugeData.map - gaugeData.barometer) * 200) / 1379));
+    display.print(ToDecimal(gaugeData.boost_psi));
   }
   else
   {
@@ -935,8 +918,8 @@ void SingleView()
     case kMATGauge:
       data = ToDecimal(gaugeData.mat);
       break;
-    case kTimingGauge:
-      data = ToDecimal(gaugeData.spark_advance);
+    case kBoostGauge:
+      data = ToDecimal(gaugeData.boost_psi);
       break;
     case kVoltageGauge:
       data = ToDecimal(gaugeData.battery_voltage);
@@ -967,6 +950,9 @@ void SingleView()
       break;
     case kAfrTargetGauge:
       data = ToDecimal(gaugeData.afr_target);
+      break;
+    case kTimingGauge:
+      data = ToDecimal(gaugeData.spark_advance);
       break;
   }
 
@@ -1039,6 +1025,15 @@ void SingleView()
     }
     display.setCursor(((kOledWidth - 1) - (data.length() * kTextWidth2)), (kOledHeight / 2) - 1);
     display.print(ToDecimal(gaugeData.mat_highest));
+    break;
+  case kBoostGauge:
+    if (gaugeData.boost_psi > gaugeData.boost_psi_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
+    {
+      gaugeData.boost_psi_highest = gaugeData.boost_psi;
+      validity_window_highest = millis();
+    }
+    display.setCursor(((kOledWidth - 1) - (data.length() * kTextWidth2)), (kOledHeight / 2) - 1);
+    display.print(ToDecimal(gaugeData.boost_psi_highest));
     break;
   case kKnockGauge:
     if (gaugeData.knock > gaugeData.knock_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
