@@ -271,11 +271,20 @@ void KickTheDog()
   interrupts();
 }
 
+// Converts a value stored in the format (val)E-1 to a decimal string for display
 String ToDecimal(int val)
 {
   String temp = String(val);
 
   return temp.substring(0, temp.length() - 1) + '.' + temp.charAt(temp.length() - 1);
+}
+
+// Returns the number of characters in an integer
+int IntegerWidth(int val)
+{
+  String temp = String(val);
+
+  return temp.length();
 }
 
 void ReadCanMessage()
@@ -979,7 +988,7 @@ void SingleView()
       gaugeData.rpm_highest = gaugeData.rpm;
       validity_window_highest = millis();
     }
-    display.setCursor((kOledWidth - 1) - (data.length() * kTextWidth2), (kOledHeight / 2) - 1);
+    display.setCursor((kOledWidth - 1) - (IntegerWidth(gaugeData.rpm_highest) * kTextWidth2), (kOledHeight / 2) - 1);
     display.print(gaugeData.rpm_highest);
     break;
   case kAFRGauge:
@@ -996,7 +1005,7 @@ void SingleView()
     display.setCursor(0, (kOledHeight / 2) - 1);
     display.print(ToDecimal(gaugeData.afr_lowest));
 
-    display.setCursor((kOledWidth - 1) - (data.length() * kTextWidth2), (kOledHeight / 2) - 1);
+    display.setCursor((kOledWidth - 1) - (IntegerWidth(gaugeData.afr_highest) * kTextWidth2), (kOledHeight / 2) - 1);
     display.print(ToDecimal(gaugeData.afr_highest));
     break;
   case kCoolantGauge:
@@ -1005,7 +1014,7 @@ void SingleView()
       gaugeData.coolant_temp_highest = gaugeData.coolant_temp;
       validity_window_highest = millis();
     }
-    display.setCursor(((kOledWidth - 1) - (data.length() * kTextWidth2)), (kOledHeight / 2) - 1);
+    display.setCursor(((kOledWidth - 1) - (IntegerWidth(gaugeData.coolant_temp_highest) * kTextWidth2)), (kOledHeight / 2) - 1);
     display.print(ToDecimal(gaugeData.coolant_temp_highest));
     break;
   case kMAPGauge:
@@ -1014,7 +1023,7 @@ void SingleView()
       gaugeData.map_highest = gaugeData.map;
       validity_window_highest = millis();
     }
-    display.setCursor((kOledWidth - 1) - (data.length() * kTextWidth2), (kOledHeight / 2) - 1);
+    display.setCursor((kOledWidth - 1) - (IntegerWidth(gaugeData.map_highest) * kTextWidth2), (kOledHeight / 2) - 1);
     display.print(ToDecimal(gaugeData.map_highest));
     break;
   case kMATGauge:
@@ -1023,7 +1032,7 @@ void SingleView()
       gaugeData.mat_highest = gaugeData.mat;
       validity_window_highest = millis();
     }
-    display.setCursor(((kOledWidth - 1) - (data.length() * kTextWidth2)), (kOledHeight / 2) - 1);
+    display.setCursor(((kOledWidth - 1) - (IntegerWidth(gaugeData.mat_highest) * kTextWidth2)), (kOledHeight / 2) - 1);
     display.print(ToDecimal(gaugeData.mat_highest));
     break;
   case kBoostGauge:
@@ -1032,7 +1041,7 @@ void SingleView()
       gaugeData.boost_psi_highest = gaugeData.boost_psi;
       validity_window_highest = millis();
     }
-    display.setCursor(((kOledWidth - 1) - (data.length() * kTextWidth2)), (kOledHeight / 2) - 1);
+    display.setCursor(((kOledWidth - 1) - (IntegerWidth(gaugeData.boost_psi_highest) * kTextWidth2)), (kOledHeight / 2) - 1);
     display.print(ToDecimal(gaugeData.boost_psi_highest));
     break;
   case kKnockGauge:
@@ -1041,7 +1050,7 @@ void SingleView()
       gaugeData.knock_highest = gaugeData.knock;
       validity_window_highest = millis();
     }
-    display.setCursor(((kOledWidth - 1) - (data.length() * kTextWidth2)), (kOledHeight / 2) - 1);
+    display.setCursor(((kOledWidth - 1) - (IntegerWidth(gaugeData.knock_highest) * kTextWidth2)), (kOledHeight / 2) - 1);
     display.print(ToDecimal(gaugeData.knock_highest));
     break;
   default:
