@@ -315,33 +315,33 @@ void ReadCanMessage()
   switch (rxMessage.id)
   {
   case 1520: // 0
-    gaugeData.rpm = (int)(word(rxMessage.buf[6], rxMessage.buf[7]));
+    gaugeData.rpm = (rxMessage.buf[6] << 8) | rxMessage.buf[7];
     break;
   case 1521: // 1
-    gaugeData.spark_advance = (int)(word(rxMessage.buf[0], rxMessage.buf[1]));
+    gaugeData.spark_advance = (rxMessage.buf[0] << 8) | rxMessage.buf[1];
     gaugeData.engine = rxMessage.buf[3];
-    gaugeData.afr_target = (int)(word(0x00, rxMessage.buf[4]));
+    gaugeData.afr_target = rxMessage.buf[4];
     break;
   case 1522: // 2
-    gaugeData.barometer = (int)(word(rxMessage.buf[0], rxMessage.buf[1]));
-    gaugeData.map = (int)(word(rxMessage.buf[2], rxMessage.buf[3]));
-    gaugeData.mat = (int)(word(rxMessage.buf[4], rxMessage.buf[5]));
-    gaugeData.coolant_temp = (int)(word(rxMessage.buf[6], rxMessage.buf[7]));
+    gaugeData.barometer = (rxMessage.buf[0] << 8) | rxMessage.buf[1];
+    gaugeData.map = (rxMessage.buf[2] << 8) | rxMessage.buf[3];
+    gaugeData.mat = (rxMessage.buf[4] << 8) | rxMessage.buf[5];
+    gaugeData.coolant_temp = (rxMessage.buf[6] << 8) | rxMessage.buf[7];
     // 6.895kpa = 1psi
     gaugeData.boost_psi = ((gaugeData.map - gaugeData.barometer) * 200) / 1379;
     break;
   case 1523: // 3
-    gaugeData.tps = (int)(word(rxMessage.buf[0], rxMessage.buf[1]));
-    gaugeData.battery_voltage = (int)(word(rxMessage.buf[2], rxMessage.buf[3]));
+    gaugeData.tps = (rxMessage.buf[0] << 8) | rxMessage.buf[1];
+    gaugeData.battery_voltage = (rxMessage.buf[2] << 8) | rxMessage.buf[3];
     break;
   case 1524: // 4
-    gaugeData.knock = (int)(word(rxMessage.buf[0], rxMessage.buf[1]));
-    gaugeData.ego_correction = (int)(word(rxMessage.buf[2], rxMessage.buf[3]));
+    gaugeData.knock = (rxMessage.buf[0] << 8) | rxMessage.buf[1];
+    gaugeData.ego_correction = (rxMessage.buf[2] << 8) | rxMessage.buf[3];
     break;
   case 1526: // 6
-    gaugeData.iac = ((int)(word(rxMessage.buf[6], rxMessage.buf[7])) * 49) / 125;
+    gaugeData.iac = (((rxMessage.buf[6] << 8) | rxMessage.buf[7]) * 49) / 125;
   case 1529: // 9
-    gaugeData.dwell = (int)(word(rxMessage.buf[4], rxMessage.buf[5]));
+    gaugeData.dwell = (rxMessage.buf[4] << 8) | rxMessage.buf[5];
     break;
   case 1530: // 10
     gaugeData.status_1 = rxMessage.buf[0];
@@ -351,13 +351,13 @@ void ReadCanMessage()
     gaugeData.status_7 = rxMessage.buf[7];
     break;
   case 1537: // 17
-    gaugeData.boost_duty = (int)(word(rxMessage.buf[4], rxMessage.buf[5]));
+    gaugeData.boost_duty = (rxMessage.buf[4] << 8) | rxMessage.buf[5];
     break;
   case 1548: // 28
-    gaugeData.idle_target = (int)(word(rxMessage.buf[0], rxMessage.buf[1]));
+    gaugeData.idle_target = (rxMessage.buf[0] << 8) | rxMessage.buf[1];
     break;
   case 1551: // 31
-    gaugeData.afr = (int)(word(0x00, rxMessage.buf[0]));
+    gaugeData.afr = rxMessage.buf[0];
     break;
   case 1574: // 54
     gaugeData.check_engine_light = rxMessage.buf[2];
