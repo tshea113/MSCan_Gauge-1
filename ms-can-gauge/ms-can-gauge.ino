@@ -68,8 +68,6 @@ Settings gaugeSettings;
 IntervalTimer wdTimer;
 
 int neo_brightness = 1;
-// TODO: Remove this when DivideBy10() is removed.
-char temp_chars[11];
 
 static CAN_message_t txMessage,rxMessage;
 
@@ -273,24 +271,42 @@ void KickTheDog()
   interrupts();
 }
 
+// Converts a value stored in the format (val)E-1 to a decimal string for display
 String ToDecimal(int val)
 {
   String temp = String(val);
 
-  return temp.substring(0, temp.length() - 1) + '.' + temp.charAt(temp.length() - 1);
+  // Single digit values need a leading zero
+  if (temp.length() == 1)
+  {
+    return "0." + temp.substring(0, temp.length());
+  }
+  else
+  {
+    return temp.substring(0, temp.length() - 1) + '.' + temp.charAt(temp.length() - 1);
+  }
 }
 
-// TODO: Get rid of this eventually. We don't need to use a global here.
-void DivideBy10(int val)
+// Returns the number of characters in an integer
+int IntegerWidth(int val, bool isDecimal)
 {
-  int length;
-
-  itoa(val, temp_chars, 10);
-  length = strlen(temp_chars);
-
-  temp_chars[length + 1] = temp_chars[length]; // null shift right
-  temp_chars[length] = temp_chars[length - 1];
-  temp_chars[length - 1] = '.';
+  String temp = String(val);
+  if (isDecimal)
+  {
+    // Single digit values need a leading zero
+    if (temp.length() == 1)
+    {
+      return temp.length() + 2;
+    }
+    else
+    {
+      return temp.length() + 1;
+    }
+  }
+  else
+  {
+    return temp.length();
+  }
 }
 
 void ReadCanMessage()
@@ -311,6 +327,8 @@ void ReadCanMessage()
     gaugeData.map = (int)(word(rxMessage.buf[2], rxMessage.buf[3]));
     gaugeData.mat = (int)(word(rxMessage.buf[4], rxMessage.buf[5]));
     gaugeData.coolant_temp = (int)(word(rxMessage.buf[6], rxMessage.buf[7]));
+    // 6.895kpa = 1psi
+    gaugeData.boost_psi = ((gaugeData.map - gaugeData.barometer) * 200) / 1379;
     break;
   case 1523: // 3
     gaugeData.tps = (int)(word(rxMessage.buf[0], rxMessage.buf[1]));
@@ -836,7 +854,7 @@ void DashboardView()
     display.setTextSize(2);
     display.setCursor(labelWidth + 2, (2 * kDashboardLineHeight) + 1);
     // 6.895kpa = 1psi
-    display.print(ToDecimal(((gaugeData.map - gaugeData.barometer) * 200) / 1379));
+    display.print(ToDecimal(gaugeData.boost_psi));
   }
   else
   {
@@ -897,14 +915,10 @@ void BottomView()
 
 void SingleView()
 {
-  char data[10];
-  String label;
-  display.clearDisplay();
-
   // Check for rotations
   if (myEncoder.valueChanged())
   {
-    encoder_index=myEncoder.getValue();
+    encoder_index = myEncoder.getValue();
     menuState.gauge_single_position = encoder_index;
 
     if (kDebugMode)
@@ -916,116 +930,78 @@ void SingleView()
     }
   }
 
-  label=kGauges[menuState.gauge_single_position];
+  String data;
+
   switch (static_cast<Gauges>(menuState.gauge_single_position))
   {
     case kRPMGauge:
-      itoa(gaugeData.rpm, data, 10);
+      data = String(gaugeData.rpm, DEC);
       break;
     case kAFRGauge:
-      DivideBy10(gaugeData.afr);
-      strcpy(data, temp_chars);
+      data = ToDecimal(gaugeData.afr);
       break;
     case kCoolantGauge:
-      DivideBy10(gaugeData.coolant_temp);
-      strcpy(data, temp_chars);
+      data = ToDecimal(gaugeData.coolant_temp);
       break;
     case kMAPGauge:
-      DivideBy10(gaugeData.map);
-      strcpy(data, temp_chars);
+      data = ToDecimal(gaugeData.map);
       break;
     case kMATGauge:
-      DivideBy10(gaugeData.mat);
-      strcpy(data, temp_chars);
+      data = ToDecimal(gaugeData.mat);
       break;
-    case kTimingGauge:
-      DivideBy10(gaugeData.spark_advance);
-      strcpy(data, temp_chars);
+    case kBoostGauge:
+      data = ToDecimal(gaugeData.boost_psi);
       break;
     case kVoltageGauge:
-      DivideBy10(gaugeData.battery_voltage);
-      strcpy(data, temp_chars);
+      data = ToDecimal(gaugeData.battery_voltage);
       break;
     case kTPSGauge:
-      DivideBy10(gaugeData.tps);
-      strcpy(data, temp_chars);
+      data = ToDecimal(gaugeData.tps);
       break;
     case kKnockGauge:
-      DivideBy10(gaugeData.knock);
-      strcpy(data, temp_chars);
+      data = ToDecimal(gaugeData.knock);
       break;
     case kBarometerGauge:
-      DivideBy10(gaugeData.barometer);
-      strcpy(data, temp_chars);
+      data = ToDecimal(gaugeData.barometer);
       break;
     case kEGOCorrectionGauge:
-      DivideBy10(gaugeData.ego_correction);
-      strcpy(data, temp_chars);
+      data = ToDecimal(gaugeData.ego_correction);
       break;
     case kIACGauge:
-      itoa(gaugeData.iac, data, 10);
+      data = String(gaugeData.iac, DEC);
       break;
     case kSparkDwellGauge:
-      DivideBy10(gaugeData.dwell);
-      strcpy(data, temp_chars);
+      data = ToDecimal(gaugeData.dwell);
       break;
     case kBoostDutyGauge:
-      itoa(gaugeData.boost_duty, data, 10);
+      data = String(gaugeData.boost_duty, DEC);
       break;
     case kIdleTargetGauge:
-      itoa(gaugeData.idle_target, data, 10);
+      data = String(gaugeData.idle_target, DEC);
       break;
     case kAfrTargetGauge:
-      DivideBy10(gaugeData.afr_target);
-      strcpy(data, temp_chars);
+      data = ToDecimal(gaugeData.afr_target);
+      break;
+    case kTimingGauge:
+      data = ToDecimal(gaugeData.spark_advance);
       break;
   }
-  // TODO: I'm not sure if this is even needed. Need to figure out if this data is useful. If so the data should loop properly. Maybe update the UI for this a bit?
-  // else
-  // {
-  //   temp_index = encoder_index - 15;
-  //   char temporary[15];
-  //   byte sbyte, bitp, dbit;
-  //   strcpy_P(temporary, MSDataBin[temp_index].name);
-  //   label=temporary;
 
-  //   sbyte=pgm_read_byte(&MSDataBin[temp_index].sbyte);
-  //   bitp=pgm_read_byte(&MSDataBin[temp_index].bitp);
-  //   dbit=bitRead(indicator[sbyte], bitp);
-  //   if ( dbit == 1 )
-  //   {
-  //     data[0]='O';
-  //     data[1]='n';
-  //     data[2]='\0';
-  //   }
-  //   else
-  //   {
-  //     data[0]='O';
-  //     data[1]='f';
-  //     data[2]='f';
-  //     data[3]='\0';
-  //   }
-  // }
-
-  int dlength = strlen(data);
-  int midpos = ((kOledHeight - 1) - ((dlength * kTextWidth4) / 2));
-
+  display.clearDisplay();
   display.setTextColor(WHITE);
+
+  // Data
   display.setTextSize(4);
-  display.setCursor(midpos, 0);
+  display.setCursor(((kOledWidth - 1) - (data.length() * kTextWidth4)) / 2, 0);
   display.print(data);
 
+  // Label
   display.setTextSize(2);
   display.setCursor(0, ((kOledHeight - 1) - kTextHeight2));
-  display.print(label);
+  display.print(kGauges[menuState.gauge_single_position]);
 
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-  display.print(menuState.gauge_single_position + 1);
-
+  // Additional data for highest/lowest value
   display.setTextSize(2);
-
-  //Additional data for highest/lowest value
   switch(static_cast<Gauges>(menuState.gauge_single_position))
   {
   case kRPMGauge:
@@ -1034,26 +1010,25 @@ void SingleView()
       gaugeData.rpm_highest = gaugeData.rpm;
       validity_window_highest = millis();
     }
-    display.setCursor(((kOledWidth - 1) - (dlength * kTextWidth2)), (kOledHeight / 2) - 1);
+    display.setCursor((kOledWidth - 1) - (IntegerWidth(gaugeData.rpm_highest, false) * kTextWidth2), (kOledHeight / 2) - 1);
     display.print(gaugeData.rpm_highest);
     break;
   case kAFRGauge:
     if (gaugeData.afr > gaugeData.afr_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
     {
       gaugeData.afr_highest = gaugeData.afr;
-      validity_window_highest=millis();
+      validity_window_highest = millis();
     }
     if (gaugeData.afr < gaugeData.afr_lowest || millis() > (validity_window_lowest + kMinMaxGaugeInterval))
     {
       gaugeData.afr_lowest = gaugeData.afr;
-      validity_window_lowest=millis();
+      validity_window_lowest = millis();
     }
     display.setCursor(0, (kOledHeight / 2) - 1);
-    DivideBy10(gaugeData.afr_lowest);
-    display.print(temp_chars);
-    display.setCursor(((kOledWidth - 1) - (dlength * kTextWidth2)), (kOledHeight / 2) - 1);
-    DivideBy10(gaugeData.afr_highest);
-    display.print(temp_chars);
+    display.print(ToDecimal(gaugeData.afr_lowest));
+
+    display.setCursor((kOledWidth - 1) - (IntegerWidth(gaugeData.afr_highest, true) * kTextWidth2), (kOledHeight / 2) - 1);
+    display.print(ToDecimal(gaugeData.afr_highest));
     break;
   case kCoolantGauge:
     if (gaugeData.coolant_temp > gaugeData.coolant_temp_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
@@ -1061,9 +1036,8 @@ void SingleView()
       gaugeData.coolant_temp_highest = gaugeData.coolant_temp;
       validity_window_highest = millis();
     }
-    display.setCursor(((kOledWidth - 1) - (dlength * kTextWidth2)), (kOledHeight / 2) - 1);
-    DivideBy10(gaugeData.coolant_temp_highest);
-    display.print(temp_chars);
+    display.setCursor(((kOledWidth - 1) - (IntegerWidth(gaugeData.coolant_temp_highest, true) * kTextWidth2)), (kOledHeight / 2) - 1);
+    display.print(ToDecimal(gaugeData.coolant_temp_highest));
     break;
   case kMAPGauge:
     if (gaugeData.map > gaugeData.map_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
@@ -1071,9 +1045,8 @@ void SingleView()
       gaugeData.map_highest = gaugeData.map;
       validity_window_highest = millis();
     }
-    display.setCursor(((kOledWidth - 1) - (dlength * kTextWidth2)), (kOledHeight / 2) - 1);
-    DivideBy10(gaugeData.map_highest);
-    display.print(temp_chars);
+    display.setCursor((kOledWidth - 1) - (IntegerWidth(gaugeData.map_highest, true) * kTextWidth2), (kOledHeight / 2) - 1);
+    display.print(ToDecimal(gaugeData.map_highest));
     break;
   case kMATGauge:
     if (gaugeData.mat > gaugeData.mat_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
@@ -1081,9 +1054,17 @@ void SingleView()
       gaugeData.mat_highest = gaugeData.mat;
       validity_window_highest = millis();
     }
-    display.setCursor(((kOledWidth - 1) - (dlength * kTextWidth2)), (kOledHeight / 2) - 1);
-    DivideBy10(gaugeData.mat_highest);
-    display.print(temp_chars);
+    display.setCursor(((kOledWidth - 1) - (IntegerWidth(gaugeData.mat_highest, true) * kTextWidth2)), (kOledHeight / 2) - 1);
+    display.print(ToDecimal(gaugeData.mat_highest));
+    break;
+  case kBoostGauge:
+    if (gaugeData.boost_psi > gaugeData.boost_psi_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
+    {
+      gaugeData.boost_psi_highest = gaugeData.boost_psi;
+      validity_window_highest = millis();
+    }
+    display.setCursor(((kOledWidth - 1) - (IntegerWidth(gaugeData.boost_psi_highest, true) * kTextWidth2)), (kOledHeight / 2) - 1);
+    display.print(ToDecimal(gaugeData.boost_psi_highest));
     break;
   case kKnockGauge:
     if (gaugeData.knock > gaugeData.knock_highest || millis() > (validity_window_highest + kMinMaxGaugeInterval))
@@ -1091,9 +1072,8 @@ void SingleView()
       gaugeData.knock_highest = gaugeData.knock;
       validity_window_highest = millis();
     }
-    display.setCursor(((kOledWidth - 1) - (dlength * kTextWidth2)), (kOledHeight / 2) - 1);
-    DivideBy10(gaugeData.knock_highest);
-    display.print(temp_chars);
+    display.setCursor(((kOledWidth - 1) - (IntegerWidth(gaugeData.knock_highest, true) * kTextWidth2)), (kOledHeight / 2) - 1);
+    display.print(ToDecimal(gaugeData.knock_highest));
     break;
   default:
     break;
@@ -1179,8 +1159,7 @@ void GraphView()
     switch (static_cast<Graphs>(menuState.gauge_graph_position))
     {
     case kAFRGraph:
-      DivideBy10(gaugeData.afr);
-      display.print(temp_chars);
+      display.print(ToDecimal(gaugeData.afr));
       display.drawFastHLine(0, 40, 128, WHITE); // stoich 14.7 line
       for (int x = 1; x < 128; x += 2)
       {
