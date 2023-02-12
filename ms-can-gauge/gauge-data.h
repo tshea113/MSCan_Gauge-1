@@ -1,13 +1,13 @@
 // Constants
 const int kNumViews                     = 4;      // Number of gauge views
-const int kNumSettings                  = 5;      // Number of settings
+const int kNumSettings                  = 3;      // Number of settings
 const int kNumGauges                    = 17;     // Number of gauges
 const int kNumGraphs                    = 3;      // Number of graph gauges
 const int kNumBottomMenuItems           = 6;      // Number of items in the dashboard bottom menu
 const int kNumDashboardItems            = 6;      // Number of items in the dashboard
 
 const String kViews[kNumViews] = {"Dashboard", "Single", "Graph", "Settings"};
-const String kSettings[kNumSettings] = {"LED Ring", "Shift RPM", "Warnings", "Coolant Warn", "Exit"};
+const String kSettings[kNumSettings] = {"Warnings", "Coolant Warn", "Exit"};
 const String kGauges[kNumGauges] = {"RPM", "AFR", "Coolant", "MAP", "MAT", "Boost", "Voltage", "TPS", "Knock", "Barometer", "EGO Corr", "IAC", "Sprk Dwell", "Boost Duty", "Idl Target", "AFR Target", "Timing"};
 const String kGraphs[kNumGraphs] = {"AFR", "MAP", "MAT"};
 const String kBottomMenuItems[kNumBottomMenuItems] = {"CEL", "Fan", "Idl", "Knk", "Bst", "WUE"};
@@ -23,11 +23,9 @@ enum ViewsMenu : int
 
 enum SettingMenu : int
 {
-  kLedRingEnableSetting = 0,
-  kShiftRPMSetting = 1,
-  kWarningsEnableSetting = 2,
-  kCoolantWarningSetting = 3,
-  kExitSetting = 4
+  kWarningsEnableSetting = 0,
+  kCoolantWarningSetting = 1,
+  kExitSetting = 2
 };
 
 enum Gauges : int
@@ -60,12 +58,10 @@ enum Graphs : int
 
 // EEPROM Addresses
 const uint8_t kEEPROMInitAddr     = 0;
-const uint8_t kRingEnableAddr     = 1;
-const uint8_t kShiftRpmAddr       = 2;
-const uint8_t kWarningEnableAddr  = 4;
-const uint8_t kCoolantWarningAddr = 5;
+const uint8_t kWarningEnableAddr  = 1;
+const uint8_t kCoolantWarningAddr = 2;
 
-const int kEEPROMValidId = 4;
+const int kEEPROMValidId = 2;
 
 // Data Structures
 struct MenuState
@@ -82,8 +78,6 @@ struct MenuState
 struct Settings
 {
   bool dirty = false;
-  bool led_ring_enable = true;
-  int shift_rpm = 6800;
   bool warnings_enable = true;
   int coolant_warning_temp = 240;
 };

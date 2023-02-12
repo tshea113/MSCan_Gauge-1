@@ -1,5 +1,4 @@
 // Pin definitions
-#define LEDPIN      5   // Neopixel LED
 #define ENC_BUTTON  15  //  
 #define ENC_PIN_1   16  //  
 #define ENC_PIN_2   17  // 
