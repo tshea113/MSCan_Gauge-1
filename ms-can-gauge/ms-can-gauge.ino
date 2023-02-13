@@ -17,7 +17,6 @@ extern "C" {
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <TimeLib.h>
-#include <FastLED.h>
 #include <EncoderTool.h>
 #include <EEPROM.h>
 #include <Bounce2.h>
@@ -28,9 +27,6 @@ extern "C" {
 #include "gauge-data.h"
 
 using namespace EncoderTool;
-
-// FastLED
-CRGB leds[kNumLeds];
 
 // Encoder
 Encoder myEncoder;
@@ -53,9 +49,7 @@ Adafruit_SSD1306 display(kOledWidth, kOledHeight, &Wire, OLED_RESET);
 // Metro ticks are milliseconds
 Metro commTimer = Metro(kCanTimeout);
 Metro displayTimer = Metro(kDisplayRefresh);
-Metro gaugeBlinkTimer = Metro(kGaugeFlashTimer);
 boolean connection_state = false;
-boolean gauge_blink = false;
 
 // MS data vars
 GaugeData gaugeData;
@@ -66,8 +60,6 @@ Settings gaugeSettings;
 
 // Watchdog timer
 IntervalTimer wdTimer;
-
-int neo_brightness = 1;
 
 static CAN_message_t txMessage,rxMessage;
 
@@ -92,36 +84,23 @@ void setup(void)
       switch (i)
       {
       default:
-        EEPROM.write(kRingEnableAddr, gaugeSettings.led_ring_enable);
-        break;
-      case 1:
-        EEPROM.write(kShiftRpmAddr, gaugeSettings.shift_rpm);
-        EEPROM.write(kShiftRpmAddr + 1, gaugeSettings.shift_rpm >> 8);
-        break;
-      case 2:
         EEPROM.write(kWarningEnableAddr, gaugeSettings.warnings_enable);
         break;
-      case 3:
+      case 1:
         EEPROM.write(kCoolantWarningAddr, gaugeSettings.coolant_warning_temp);
         EEPROM.write(kCoolantWarningAddr + 1, gaugeSettings.coolant_warning_temp >> 8);
+        break;
       }
     }
     EEPROM.write(kEEPROMInitAddr, kEEPROMValidId);
   }
 
-  gaugeSettings.led_ring_enable = EEPROM.read(kRingEnableAddr);
-  gaugeSettings.shift_rpm = EEPROM.read((kShiftRpmAddr + 1)) << 8;
-  gaugeSettings.shift_rpm |= EEPROM.read(kShiftRpmAddr);
   gaugeSettings.warnings_enable = EEPROM.read(kWarningEnableAddr);
   gaugeSettings.coolant_warning_temp = EEPROM.read((kCoolantWarningAddr + 1)) << 8;
   gaugeSettings.coolant_warning_temp |= EEPROM.read(kCoolantWarningAddr);
 
   if (kDebugMode)
   {
-    Serial.print("LED Ring Enable: ");
-    Serial.println(gaugeSettings.led_ring_enable);
-    Serial.print("Shift RPM: ");
-    Serial.println(gaugeSettings.shift_rpm);
     Serial.print("Warnings Enable: ");
     Serial.println(gaugeSettings.warnings_enable);
     Serial.print("Coolant Warning: ");
@@ -139,30 +118,6 @@ void setup(void)
   display.drawBitmap(0,0, miata_logo, 128, 64, 1);
   display.display();
 
-  FastLED.addLeds<NEOPIXEL, LEDPIN>(leds, kNumLeds);
-
-  // Ring initialization animation
-  if (gaugeSettings.led_ring_enable)
-  {
-    for(int i = 0; i < kNumLeds; i++)
-    {
-      leds[i].setRGB(16,16,16);
-      FastLED.show();
-      delay(20);
-    }
-    delay(200);
-    // TODO: Don't like this magic number, maybe have this tied to some brightness variable?
-    for (int j = 16; j > -1; j--) 
-    {
-      for(int i = 0; i < kNumLeds; i++)
-      {
-        leds[i].setRGB(j, j, j);
-      }
-      FastLED.show();
-      delay(20);
-    }
-  }
-
   myEncoder.begin(ENC_PIN_1, ENC_PIN_2);
   encoderButton.attach(ENC_BUTTON, INPUT_PULLUP);
   encoderButton.interval(kButtonInterval);
@@ -178,12 +133,6 @@ void setup(void)
 // -------------------------------------------------------------
 void loop(void)
 {
-  if (gaugeBlinkTimer.check())
-  {
-    gauge_blink = !gauge_blink;
-    gaugeBlinkTimer.reset();
-  }
-
   encoderButton.update();
   MenuCheck();
 
@@ -198,7 +147,6 @@ void loop(void)
     display.setCursor(0,0);
     display.display();
 
-    NoLightView();
     commTimer.reset();
     connection_state = false;
   }
@@ -206,15 +154,6 @@ void loop(void)
   // main display routine
   if ((connection_state || kDebugMode) && displayTimer.check())
   {
-    if (gaugeSettings.led_ring_enable)
-    {
-      ShiftLightView();
-    }
-    else
-    {
-      NoLightView();
-    }
-
     if (menuState.in_menu)
     {
       MenuView();
@@ -434,7 +373,6 @@ boolean IsOutOfBounds()
   if (gaugeData.rpm > 100)
   {
     if ((gaugeData.coolant_temp/10) > gaugeSettings.coolant_warning_temp) return true;
-    // if (gaugeData.check_engine_light != 0) return true;
     if (bitRead(gaugeData.status_2,6)) return true; // overboost
   } 
   return false;
@@ -460,14 +398,6 @@ void MenuCheck()
         menuState.is_setting_selected = true;
         switch (static_cast<SettingMenu>(menuState.settings_position))
         {
-        case kLedRingEnableSetting:
-          myEncoder.setLimits(0, 1, true);
-          myEncoder.setValue(gaugeSettings.led_ring_enable);
-          break;
-        case kShiftRPMSetting:
-          myEncoder.setLimits(kMinRpm/kRpmInterval, kMaxRpm/kRpmInterval, true);
-          myEncoder.setValue(gaugeSettings.shift_rpm/kRpmInterval);
-          break;
         case kWarningsEnableSetting:
           myEncoder.setLimits(0, 1, true);
           myEncoder.setValue(gaugeSettings.warnings_enable);
@@ -532,9 +462,6 @@ void WriteSettingsToEEPROM()
       Serial.println("Writing to EEPROM!");
     }
 
-    EEPROM.write(kRingEnableAddr, gaugeSettings.led_ring_enable);
-    EEPROM.write(kShiftRpmAddr, gaugeSettings.shift_rpm);
-    EEPROM.write(kShiftRpmAddr + 1, gaugeSettings.shift_rpm >> 8);
     EEPROM.write(kWarningEnableAddr, gaugeSettings.warnings_enable);
     EEPROM.write(kCoolantWarningAddr, gaugeSettings.coolant_warning_temp);
     EEPROM.write(kCoolantWarningAddr + 1, gaugeSettings.coolant_warning_temp >> 8);
@@ -579,12 +506,6 @@ void SettingsView()
     {
       switch (static_cast<SettingMenu>(menuState.settings_position))
       {
-      case kLedRingEnableSetting:
-        gaugeSettings.led_ring_enable = encoder_index;
-        break;
-      case kShiftRPMSetting:
-        gaugeSettings.shift_rpm = encoder_index * kRpmInterval;
-        break;
       case kWarningsEnableSetting:
         gaugeSettings.warnings_enable = encoder_index;
         break;
@@ -639,12 +560,6 @@ void SettingsView()
     display.setCursor(100, (10 * i) + 2);
     switch (static_cast<SettingMenu>(i))
     {
-    case kLedRingEnableSetting:
-      display.print(gaugeSettings.led_ring_enable ? "On" : "Off");
-      break;
-    case kShiftRPMSetting:
-      display.print(gaugeSettings.shift_rpm);
-      break;
     case kWarningsEnableSetting:
       display.print(gaugeSettings.warnings_enable ? "On" : "Off"); 
       break;
@@ -685,117 +600,6 @@ void WarningView()
   }
 
   display.display();
-
-  // if (bitRead(gaugeData.check_engine_light, 0))
-  // {
-  //   display.setTextColor(WHITE);
-  //   dlength=3;
-  //   midpos=(63 - ((dlength * 23) / 2));
-  //   display.setCursor(29, 0);
-  //   display.setTextSize(4);
-  //   display.print("MAP");
-  //   display.setTextSize(2);
-  //   display.setCursor(8, 48);
-  //   display.print("Error");
-  // }
-
-  // if (bitRead(gaugeData.check_engine_light, 1))
-  // {
-  //   display.setTextColor(WHITE);
-  //   dlength=3;
-  //   midpos=(63 - ((dlength * 23) / 2));
-  //   display.setCursor(29, 0);
-  //   display.setTextSize(4);
-  //   display.print("MAT");
-  //   display.setTextSize(2);
-  //   display.setCursor(8, 48);
-  //   display.print("Error");
-
-  // }
-
-  // if (bitRead(gaugeData.check_engine_light, 2))
-  // {
-  //   display.setTextColor(WHITE);
-  //   dlength=3;
-  //   midpos=(63 - ((dlength * 23) / 2));
-  //   display.setCursor(29, 0);
-  //   display.setTextSize(4);
-  //   display.print("CLT");
-  //   display.setTextSize(2);
-  //   display.setCursor(8, 48);
-  //   display.print("Error");
-  // }
-
-  // if (bitRead(gaugeData.check_engine_light, 3))
-  // {
-  //   display.setTextColor(WHITE);
-  //   dlength=3;
-  //   midpos=(63 - ((dlength * 23) / 2));
-  //   display.setCursor(29, 0);
-  //   display.setTextSize(4);
-  //   display.print("TPS");
-  //   display.setTextSize(2);
-  //   display.setCursor(8, 48);
-  //   display.print("Error");
-
-  // }
-
-  // if (bitRead(gaugeData.check_engine_light, 4))
-  // {
-  //   display.setTextColor(WHITE);
-  //   dlength=3;
-  //   midpos=(63 - ((dlength * 23) / 2));
-  //   display.setCursor(29, 0);
-  //   display.setTextSize(4);
-  //   display.print("BATT");
-  //   display.setTextSize(2);
-  //   display.setCursor(8, 48);
-  //   display.print("Error");
-  // }
-
-  // if (bitRead(gaugeData.check_engine_light, 5))
-  // {
-  //   display.setTextColor(WHITE);
-  //   dlength=3;
-  //   midpos=(63 - ((dlength * 23) / 2));
-  //   display.setCursor(29, 0);
-  //   display.setTextSize(4);
-  //   display.print("AFR");
-  //   display.setTextSize(2);
-  //   display.setCursor(8, 48);
-  //   display.print("Error");
-  // }
-
-  // if (bitRead(gaugeData.check_engine_light, 6))
-  // {
-  //   display.setTextColor(WHITE);
-  //   dlength=3;
-  //   midpos=(63 - ((dlength * 23) / 2));
-  //   display.setCursor(29, 0);
-  //   display.setTextSize(4);
-  //   display.print("Sync");
-  //   display.setTextSize(2);
-  //   display.setCursor(8, 48);
-  //   display.print("Error");
-  // }
-
-  // if (bitRead(gaugeData.check_engine_light, 7))
-  // {
-  //   display.setTextColor(WHITE);
-  //   dlength=3;
-  //   midpos=(63 - ((dlength * 23) / 2));
-  //   display.setCursor(29, 0);
-  //   display.setTextSize(4);
-  //   display.print("EGT");
-  //   display.setTextSize(2);
-  //   display.setCursor(8, 48);
-  //   display.print("Error");
-  // }
-
-  // if ( bitRead(gaugeData.status_2,6) == 1)
-  // {
-  //   DangerView();
-  // }
 }
 
 void DashboardView()
@@ -1185,93 +989,6 @@ void GraphView()
 
     validity_window_highest = millis();
   }
-}
-
-void DangerView()
-{
-  display.setTextSize(2);
-  display.setTextColor(WHITE);
-  display.clearDisplay();
-  display.setCursor(0,0);
-
-  display.setCursor(4,0);
-  display.setTextSize(2);
-  display.print("Warning");
-  display.print("!");
-  display.print("!");
-  display.print("!");
-
-  display.setCursor(10,28);
-  display.print("Danger to");
-  display.setCursor(12,45);
-  display.println("Manifold");
-  display.display();
-}
-
-void ShiftLightView()
-{
-  if (gaugeData.rpm > 4000)
-  {
-    if (gaugeData.rpm < gaugeSettings.shift_rpm)
-    {
-      uint8_t currLights = (gaugeData.rpm - 4000) / ((gaugeSettings.shift_rpm - 4000) / kNumLeds);
-
-      for (int i = 0; i < currLights; i++)
-      {
-        uint8_t red = (255 * neo_brightness) / 16;
-        leds[i].setRGB(red, 0, 0);
-      }
-    }
-    else
-    {
-      for (int i = 0; i < kNumLeds; i++)
-      {
-        if (gauge_blink)
-        {
-          uint8_t red = (255 * neo_brightness) / 16;
-          leds[i].setRGB(red, 0, 0);
-        }
-        else
-        {
-          leds[i].setRGB(0, 0, 0);
-        }
-      }
-    }
-  }
-  else
-  {
-    for(int i = 0; i < kNumLeds; i++)
-    {
-      leds[i].setRGB(0, 0, 0);
-    }
-  }
-  FastLED.show();
-}
-
-void WarningLightView()
-{
-  for (int i = 0; i < kNumLeds; i++)
-  {
-    if (gauge_blink)
-    {
-      uint8_t red = (255 * neo_brightness) / 16;
-      leds[i].setRGB(red, 0, 0);
-    }
-    else
-    {
-      leds[i].setRGB(0, 0, 0);
-    }
-  }
-  FastLED.show();
-}
-
-void NoLightView()
-{
-  for(int i = 0; i < kNumLeds; i++)
-  {
-    leds[i].setRGB(0, 0, 0);
-  }
-  FastLED.show();
 }
 
 void PrintMenu(const String items[], int numItems, int currPos)
