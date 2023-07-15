@@ -1,16 +1,3 @@
-#ifdef __cplusplus
-extern "C" {
-#endif
-  void startup_early_hook() {
-    WDOG_TOVALL = 2000; // The next 2 lines sets the time-out value. This is the value that the watchdog timer compare itself to.
-    WDOG_TOVALH = 0;
-    WDOG_STCTRLH = (WDOG_STCTRLH_ALLOWUPDATE | WDOG_STCTRLH_WDOGEN | WDOG_STCTRLH_WAITEN | WDOG_STCTRLH_STOPEN); // Enable WDG
-    WDOG_PRESC = 0; // prescaler 
-  }
-#ifdef __cplusplus
-}
-#endif
-
 #include <Metro.h>
 #include <FlexCAN_T4.h>
 #include <Wire.h>
@@ -57,9 +44,6 @@ GaugeData gaugeData;
 // Menu vars
 MenuState menuState;
 Settings gaugeSettings;
-
-// Watchdog timer
-IntervalTimer wdTimer;
 
 static CAN_message_t txMessage,rxMessage;
 
@@ -127,7 +111,6 @@ void setup(void)
   digitalWrite(LED_BUILTIN, HIGH);
   delay(100);
   digitalWrite(LED_BUILTIN, LOW);
-  wdTimer.begin(KickTheDog, 500000); // kick the dog every 500msec
 }
 
 // -------------------------------------------------------------
@@ -198,16 +181,6 @@ void loop(void)
 
     ReadCanMessage();
   }
-}
-
-void KickTheDog()
-{
-  if (kDebugMode) Serial.println("Kicking the dog!");
-  digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-  noInterrupts();
-  WDOG_REFRESH = 0xA602;
-  WDOG_REFRESH = 0xB480;
-  interrupts();
 }
 
 // Converts a value stored in the format (val)E-1 to a decimal string for display
