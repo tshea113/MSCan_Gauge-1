@@ -18,7 +18,7 @@ Due to Teensy 3.2 availability, work is in progress to get a board working with 
 * [SSD1306](https://github.com/adafruit/Adafruit_SSD1306) - OLED display
 * [Adafruit GFX](https://github.com/adafruit/Adafruit-GFX-Library) - required by SSD1306
 * [Adafruit BusIO](https://github.com/adafruit/Adafruit_BusIO) - I2C and SPI library
-* [EncoderTool](https://www.pjrc.com/teensy/arduino_libraries/Encoder.zip) - rotary encoder
+* [EncoderTool](https://github.com/luni64/EncoderTool) - rotary encoder
 * [Bounce2](https://github.com/thomasfredericks/Bounce2) - button debouncing
 
 ## Component BOM
