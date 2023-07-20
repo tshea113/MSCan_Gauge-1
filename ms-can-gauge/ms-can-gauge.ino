@@ -59,6 +59,14 @@ int histogram_index;
 // -------------------------------------------------------------
 void setup(void)
 {
+  // By default, we'll generate the high voltage from the 3.3v line internally! (neat!)
+  display.begin(SSD1306_SWITCHCAPVCC, kScreenI2cAddress);
+
+  // Show splashscreen
+  display.clearDisplay();
+  display.drawBitmap(0,0, miata_logo, 128, 64, 1);
+  display.display();
+
   // On first run of the gauge, the EEPROM will have garbage values. To fix this,
   // we check that all values are written before starting.
   if (EEPROM.read(kEEPROMInitAddr) != kEEPROMValidId)
@@ -94,14 +102,6 @@ void setup(void)
   myCan.begin();
   myCan.setBaudRate(kCanBaud);
 
-  // By default, we'll generate the high voltage from the 3.3v line internally! (neat!)
-  display.begin(SSD1306_SWITCHCAPVCC, kScreenI2cAddress);
-
-  // Show splashscreen
-  display.clearDisplay();
-  display.drawBitmap(0,0, miata_logo, 128, 64, 1);
-  display.display();
-
   myEncoder.begin(ENC_PIN_1, ENC_PIN_2);
   encoderButton.attach(ENC_BUTTON, INPUT_PULLUP);
   encoderButton.interval(kButtonInterval);
@@ -109,7 +109,7 @@ void setup(void)
 
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
-  delay(100);
+  delay(500);
   digitalWrite(LED_BUILTIN, LOW);
 }
 
