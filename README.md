@@ -42,6 +42,11 @@ Passives are 1206 package unless otherwise noted.
 There are a lot of individual pieces that come together in this project, so it is best to test things as much as you can each step of the way. The gauge should come on when plugged into USB while external power is disconnected.
 Before setting up CAN in your car, the gauge should still come on when the car is powered on and display a message about waiting for data. When you set up the CAN connection, you should start to see data come in on the screen.
 
+### Software
+You can use the released software to get a known working stable version. Install Teensyduino on your system and load the supplied hex file for your device. Plug in the teensy to your computer and press the program button on the Teensy and the software should be programmed.
+
+If you would like to modify the code, you can build it yourself through Arduino IDE. You will need to install the listed libraries before building.
+
 ### PCB
 Board gerber files are stored under Board files. Teensy 3.2 and Teensy 4.0 are *NOT* pin compatible, so choose the right PCB for your Teensy. Then encoder files are just for the rotary encoder which will be mounted remotely. I used OSHPark to build my boards, but there are plenty of PCB fabs out there to use.
 
