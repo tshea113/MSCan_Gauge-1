@@ -6,6 +6,9 @@ engine controller](http://www.msextra.com/) via CAN bus. Data is received from t
 
 Due to Teensy 3.2 availability, the project has been ported to work with [Teensy 4.0](https://www.pjrc.com/store/teensy40.html) which is both more powerful and more available. Highly suggest using that hardware over the Teensy 3.2.
 
+## Demo
+https://youtube.com/shorts/4NsZm0GjasA?feature=share
+
 ## Hardware used
 * [Teensy 4.0 microcontroller](https://www.pjrc.com/store/teensy40.html)
 * [Adafruit 128x64 monochrome 1.3" OLED display](http://www.adafruit.com/products/938) connected via SPI.
